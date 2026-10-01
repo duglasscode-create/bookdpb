@@ -304,10 +304,258 @@ export function SettingsModal({ store, onClose, theme, onToggleTheme }: {
       {msg && <p className="mb-3 text-sm">{msg}</p>}
       <div className="t-card mt-2 p-4 text-xs leading-relaxed" style={{ background: "var(--card-2)" }}>
         <p style={{ color: "var(--muted)" }}>
-          📊 {store.spaces.length} spaces · {store.folders.length} carpetas · {store.bookmarks.length} marcadores · {store.notes.length} notas<br />
-          BookDPB v1.0 — tus datos viven en tu Supabase privado.
+          📊 {store.spaces.length} spaces · {store.folders.length} carpetas · {store.bookmarks.length} marcadores · {store.notes.length} notas · {store.accounts.length} cuentas<br />
+          BookDPB v2.0 — tus datos viven en tu Supabase privado.
         </p>
       </div>
     </Shell>
   );
 }
+
+/* ============ Nueva cuenta / editar ============ */
+export function AccountModal({ store, onClose, editId }: { store: TabmeStore; onClose: () => void; editId?: string }) {
+  const existing = editId ? store.accounts.find((a) => a.id === editId) : null;
+  const [name, setName] = useState(existing?.name || "");
+  const [url, setUrl] = useState(existing?.url || "");
+  const [username, setUsername] = useState(existing?.username || "");
+  const [email, setEmail] = useState(existing?.email || "");
+  const [password, setPassword] = useState(existing?.password || "");
+  const [note, setNote] = useState(existing?.note || "");
+  const [icon, setIcon] = useState(existing?.icon || "");
+  const [showPw, setShowPw] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (!name.trim()) { setError("Ponle un nombre."); return; }
+    setSaving(true); setError("");
+    try {
+      const payload = { name, url, username, email, password, note, icon, iconType: icon ? "emoji" : "auto" };
+      if (editId) await store.updateAccount(editId, payload);
+      else await store.createAccount(payload);
+      onClose();
+    } catch (e: any) { setError(e.message || "No se pudo guardar."); }
+    setSaving(false);
+  };
+
+  return (
+    <Shell title={editId ? "✏️ Editar cuenta" : "🔑 Nueva cuenta"} onClose={onClose}>
+      <Field label="Nombre"><input className="t-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Gmail" autoFocus /></Field>
+      <Field label="URL"><input className="t-input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" inputMode="url" /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Usuario"><input className="t-input" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="usuario" autoComplete="off" /></Field>
+        <Field label="Email"><input className="t-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@…" autoComplete="off" /></Field>
+      </div>
+      <Field label="Contraseña">
+        <div className="flex gap-2">
+          <input className="t-input" type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••" autoComplete="new-password" />
+          <button type="button" className="t-btn t-btn-ghost" onClick={() => setShowPw((v) => !v)} title={showPw ? "Ocultar" : "Ver"}>👁</button>
+        </div>
+      </Field>
+      <Field label="Nota"><textarea className="t-input" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nota opcional…" /></Field>
+      <Field label="Icono (emoji)"><input className="t-input" value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="🔑" maxLength={4} style={{ fontSize: 20 }} /></Field>
+      {error && <p className="mb-3 text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
+      <div className="flex gap-2">
+        <button className="t-btn t-btn-ghost flex-1" onClick={onClose}>Cancelar</button>
+        <button className="t-btn t-btn-primary flex-1" onClick={save} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
+      </div>
+    </Shell>
+  );
+}
+
+/* ============ Ver cuenta (ver / copiar) ============ */
+export function AccountDetailModal({ store, accountId, onClose, onEdit }: {
+  store: TabmeStore; accountId: string; onClose: () => void; onEdit: () => void;
+}) {
+  const acc = store.accounts.find((a) => a.id === accountId);
+  const [showPw, setShowPw] = useState(false);
+  const [copied, setCopied] = useState("");
+  if (!acc) return null;
+
+  const copy = async (label: string, value: string | null) => {
+    if (!value) return;
+    try { await navigator.clipboard.writeText(value); setCopied(label); setTimeout(() => setCopied(""), 1500); }
+    catch { /* noop */ }
+  };
+
+  const row = (label: string, value: string | null, secret = false) => {
+    if (!value && !secret) return null;
+    const shown = secret ? (showPw ? (value || "—") : "••••••") : (value || "—");
+    return (
+      <div className="t-card mb-2 flex items-center gap-2 p-3" style={{ background: "var(--card-2)" }}>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-bold uppercase" style={{ color: "var(--muted)" }}>{label}</div>
+          <div className="truncate text-[14px] font-semibold">{shown}</div>
+        </div>
+        {secret && (
+          <button className="t-icon-btn" title={showPw ? "Ocultar" : "Ver"} onClick={() => setShowPw((v) => !v)}>👁</button>
+        )}
+        {value && (
+          <button className="t-btn t-btn-ghost" style={{ minHeight: 34, padding: "6px 10px", fontSize: 12 }} onClick={() => copy(label, value)}>
+            {copied === label ? "✓ Copiado" : "⧉ Copiar"}
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <Shell title={`🔑 ${acc.name}`} onClose={onClose}>
+      {acc.url && (
+        <a href={acc.url} target="_blank" rel="noopener noreferrer" className="t-btn t-btn-primary mb-3 w-full">↗ Abrir {acc.url.replace(/^https?:\/\//, "").split("/")[0]}</a>
+      )}
+      {row("Usuario", acc.username)}
+      {row("Email", acc.email)}
+      {row("Contraseña", acc.password, true)}
+      {acc.note && (
+        <div className="t-card mb-2 p-3" style={{ background: "var(--card-2)" }}>
+          <div className="text-[11px] font-bold uppercase" style={{ color: "var(--muted)" }}>Nota</div>
+          <div className="text-[14px]">{acc.note}</div>
+        </div>
+      )}
+      <div className="mt-3 flex gap-2">
+        <button className="t-btn t-btn-ghost flex-1" onClick={onClose}>Cerrar</button>
+        <button className="t-btn t-btn-primary flex-1" onClick={onEdit}>✏️ Editar</button>
+      </div>
+    </Shell>
+  );
+}
+
+/* ============ Nuevo asistente / editar ============ */
+export function AssistantModal({ store, onClose, editId }: { store: TabmeStore; onClose: () => void; editId?: string }) {
+  const existing = editId ? store.assistants.find((a) => a.id === editId) : null;
+  const [name, setName] = useState(existing?.name || "");
+  const [url, setUrl] = useState(existing?.url || "");
+  const [note, setNote] = useState(existing?.note || "");
+  const [icon, setIcon] = useState(existing?.icon || "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (!name.trim()) { setError("Ponle un nombre."); return; }
+    setSaving(true); setError("");
+    try {
+      const payload = { name, url, note, icon, iconType: icon ? "emoji" : "auto" };
+      if (editId) await store.updateAssistant(editId, payload);
+      else await store.createAssistant(payload);
+      onClose();
+    } catch (e: any) { setError(e.message || "No se pudo guardar."); }
+    setSaving(false);
+  };
+
+  return (
+    <Shell title={editId ? "✏️ Editar asistente" : "🤖 Nuevo asistente IA"} onClose={onClose}>
+      <Field label="Nombre"><input className="t-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. ChatGPT" autoFocus /></Field>
+      <Field label="URL"><input className="t-input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" inputMode="url" /></Field>
+      <Field label="Nota"><input className="t-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ej. Plan Plus" /></Field>
+      <Field label="Icono (emoji)"><input className="t-input" value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="🤖" maxLength={4} style={{ fontSize: 20 }} /></Field>
+      {error && <p className="mb-3 text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
+      <div className="flex gap-2">
+        <button className="t-btn t-btn-ghost flex-1" onClick={onClose}>Cancelar</button>
+        <button className="t-btn t-btn-primary flex-1" onClick={save} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
+      </div>
+    </Shell>
+  );
+}
+
+/* ============ Nuevo recordatorio / editar ============ */
+export function ReminderModal({ store, onClose, editId }: { store: TabmeStore; onClose: () => void; editId?: string }) {
+  const existing = editId ? store.reminders.find((r) => r.id === editId) : null;
+  const [text, setText] = useState(existing?.text || "");
+  const [remindAt, setRemindAt] = useState(existing?.remindAt ? existing.remindAt.slice(0, 16) : "");
+  const [icon, setIcon] = useState(existing?.icon || "⏰");
+  const [color, setColor] = useState(existing?.color || "default");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (!text.trim()) { setError("Escribe el recordatorio."); return; }
+    setSaving(true); setError("");
+    try {
+      const payload = { text, remindAt: remindAt ? new Date(remindAt).toISOString() : null, icon, color };
+      if (editId) await store.updateReminder(editId, payload);
+      else await store.createReminder(payload);
+      onClose();
+    } catch (e: any) { setError(e.message || "No se pudo guardar."); }
+    setSaving(false);
+  };
+
+  return (
+    <Shell title={editId ? "✏️ Editar recordatorio" : "⏰ Nuevo recordatorio"} onClose={onClose}>
+      <Field label="Texto"><input className="t-input" value={text} onChange={(e) => setText(e.target.value)} placeholder="Ej. Revisar el respaldo" autoFocus /></Field>
+      <Field label="Fecha y hora"><input className="t-input" type="datetime-local" value={remindAt} onChange={(e) => setRemindAt(e.target.value)} /></Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Icono"><input className="t-input" value={icon} onChange={(e) => setIcon(e.target.value)} maxLength={4} style={{ fontSize: 20 }} /></Field>
+        <Field label="Color">
+          <div className="flex flex-wrap gap-2">
+            {TABME_PALETTE.map((c) => (
+              <button key={c} type="button" className={`t-swatch ${color === c ? "selected" : ""}`} style={{ background: c }} onClick={() => setColor(c)} />
+            ))}
+          </div>
+        </Field>
+      </div>
+      {error && <p className="mb-3 text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
+      <div className="flex gap-2">
+        <button className="t-btn t-btn-ghost flex-1" onClick={onClose}>Cancelar</button>
+        <button className="t-btn t-btn-primary flex-1" onClick={save} disabled={saving}>{saving ? "Guardando..." : "Guardar"}</button>
+      </div>
+    </Shell>
+  );
+}
+
+/* ============ Elegir tipo de item ============ */
+export function NewItemModal({ onClose, onPick }: { onClose: () => void; onPick: (k: "account" | "assistant" | "reminder") => void }) {
+  return (
+    <Shell title="＋ Nuevo item" onClose={onClose}>
+      <div className="flex flex-col gap-2">
+        <button className="t-btn t-btn-ghost w-full justify-start" onClick={() => onPick("account")}>🔑 Cuenta</button>
+        <button className="t-btn t-btn-ghost w-full justify-start" onClick={() => onPick("assistant")}>🤖 Asistente IA</button>
+        <button className="t-btn t-btn-ghost w-full justify-start" onClick={() => onPick("reminder")}>⏰ Recordatorio</button>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <button className="t-btn t-btn-ghost flex-1" onClick={onClose}>Cancelar</button>
+      </div>
+    </Shell>
+  );
+}
+
+/* ============ Ayuda ============ */
+export function HelpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Shell title="❓ Ayuda de BookDPB" onClose={onClose} wide>
+      <div className="help-sec">
+        <h4>🗂 Spaces y carpetas</h4>
+        <p>Los <b>spaces</b> son tus grandes áreas (trabajo, personal…). Dentro van <b>carpetas</b> y <b>subcarpetas</b> sin límite de niveles. Pasa el ratón sobre una fila del sidebar para ver <b>＋</b> (nueva subcarpeta), <b>✎</b> (editar) y <b>×</b> (eliminar). Arrastra las filas para reordenarlas.</p>
+      </div>
+      <div className="help-sec">
+        <h4>🔖 Marcadores</h4>
+        <ul>
+          <li><b>Arrastrar</b> una tarjeta a un space o carpeta la mueve allí.</li>
+          <li>Al pasar el ratón sobre la tarjeta: <b>⭐/☆</b> favorito, <b>🔖</b> leer después, <b>✎</b> editar, <b>×</b> papelera.</li>
+          <li><b>Todas las carpetas</b> muestra cada carpeta como tarjeta con sus favoritos.</li>
+        </ul>
+      </div>
+      <div className="help-sec">
+        <h4>🗂 Mis Items</h4>
+        <p>Agrupa <b>⭐ Favoritos</b>, <b>🔑 Cuentas</b> (usuario, email, contraseña con ver/copiar), <b>🤖 Asistentes IA</b>, <b>⏰ Recordatorios</b>, <b>🕘 Historial</b>, <b>🗑 Papelera</b> y <b>🔖 Leer después</b>. Las filas se reordenan arrastrando.</p>
+      </div>
+      <div className="help-sec">
+        <h4>⬆️ Barra superior</h4>
+        <ul>
+          <li><b>💾</b> Guardar respaldo (descarga un JSON con todo).</li>
+          <li><b>📑</b> Detectar duplicados (misma URL guardada varias veces).</li>
+          <li><b>📁＋ / 🔖＋ / ✏️</b> Nueva carpeta, nuevo marcador, nueva nota.</li>
+          <li><b>⚙️</b> Ajustes, importar/exportar y tema claro/oscuro.</li>
+        </ul>
+      </div>
+      <div className="help-sec">
+        <h4>⌨️ Atajos</h4>
+        <p>Pulsa <b>/</b> en cualquier momento para ir al buscador.</p>
+      </div>
+      <div className="flex gap-2">
+        <button className="t-btn t-btn-primary flex-1" onClick={onClose}>Entendido</button>
+      </div>
+    </Shell>
+  );
+}
+

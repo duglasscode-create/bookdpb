@@ -1,67 +1,101 @@
 "use client";
 import { useState } from "react";
-import type { TSpace, TFolder, TBookmark, TabmeStore } from "@/lib/tabme-store";
-import { Star, BookMarked, Pencil, Trash2, ExternalLink, FolderPlus, RotateCcw } from "lucide-react";
+import type { TSpace, TFolder, TBookmark, TAccount, TAssistant, TabmeStore } from "@/lib/tabme-store";
 import { renderIcon } from "./icons";
 
-
-export function favicon(url: string, domain: string) {
+export function favicon(domain: string) {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 }
 
-/* ============ Tarjeta de Space (home) ============ */
-export function SpaceCard({ space, store, onOpen }: { space: TSpace; store: TabmeStore; onOpen: () => void }) {
-  const [over, setOver] = useState(false);
-  const kids = store.folders.filter((f) => f.parentId === space.id);
-  const bmCount = store.countIn(space.id);
+function domainOf(url: string | null): string {
+  if (!url) return "";
+  try { return new URL(url).hostname.replace(/^www\./, ""); } catch { return url; }
+}
+
+/* ============ Tarjeta de marcador (markup exacto de TabmeCode) ============ */
+export function BookmarkCard({ bm, store, onEdit, inTrash, onRestore, onDeleteForever, onTag }: {
+  bm: TBookmark; store: TabmeStore; onEdit: () => void; inTrash?: boolean;
+  onRestore?: () => void; onDeleteForever?: () => void; onTag?: (tagId: string) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const [imgOk, setImgOk] = useState(true);
+  const letter = (bm.title || "?").trim().charAt(0).toUpperCase() || "?";
+
   return (
     <div
-      onClick={onOpen}
-      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
-      onDragLeave={() => setOver(false)}
-      onDrop={(e) => {
-        e.preventDefault(); e.stopPropagation(); setOver(false);
-        const raw = e.dataTransfer.getData("text/plain") || "";
-        if (raw.startsWith("bookmark:")) store.moveBookmark(raw.slice(9), space.id);
-      }}
-      className={`t-card t-bm-card p-5 ${over ? "drop-target" : ""}`}
-      title="Abrir space — puedes soltar marcadores aquí"
+      className={`card${dragging ? " dragging" : ""}`}
+      draggable={!inTrash}
+      onDragStart={(e) => { e.dataTransfer.setData("text/plain", `bookmark:${bm.id}`); e.dataTransfer.effectAllowed = "move"; setDragging(true); }}
+      onDragEnd={() => setDragging(false)}
+      title={inTrash ? bm.title : "Arrastra a una carpeta para moverlo"}
     >
-      <div className="mb-3 flex items-center gap-3">
-        <span className="flex h-11 w-11 items-center justify-center rounded-xl text-2xl" style={{ background: "var(--card-2)" }}>
-          {renderIcon(space.icon, 22, "📦")}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[15px] font-bold">{space.name}</h3>
-          <p className="text-xs" style={{ color: "var(--muted)" }}>
-            {kids.length} carpeta{kids.length === 1 ? "" : "s"} · {bmCount} marcador{bmCount === 1 ? "" : "es"}
-          </p>
+      <div className="hover-actions" onClick={(e) => e.stopPropagation()}>
+        {inTrash ? (
+          <>
+            <button className="icon-btn" title="Restaurar" onClick={onRestore}>↩</button>
+            <button className="icon-btn danger" title="Eliminar para siempre" onClick={onDeleteForever}>×</button>
+          </>
+        ) : (
+          <>
+            <button className="icon-btn" title={bm.isFavorite ? "Quitar favorito" : "Marcar favorito"} onClick={() => store.toggleFavorite(bm.id)}>
+              {bm.isFavorite ? "⭐" : "☆"}
+            </button>
+            <button className="icon-btn" title="Leer después" onClick={() => store.toggleReadLater(bm.id)}>🔖</button>
+            <button className="icon-btn" title="Editar" onClick={onEdit}>✎</button>
+            <button className="icon-btn danger" title="Enviar a papelera" onClick={() => store.trashBookmark(bm.id)}>×</button>
+          </>
+        )}
+      </div>
+
+      <div className="card-top">
+        {bm.icon ? (
+          <span style={{ fontSize: 26 }}>{renderIcon(bm.icon, 26, "🔖")}</span>
+        ) : imgOk ? (
+          <img className="fav" src={favicon(bm.domain)} alt="" loading="lazy" onError={() => setImgOk(false)} />
+        ) : (
+          <span className="fav-fallback">{letter}</span>
+        )}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="card-title">
+            <a href={bm.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{bm.title}</a>
+          </div>
+          <div className="card-domain">{bm.domain}</div>
         </div>
       </div>
-      {kids.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {kids.slice(0, 6).map((k) => (
-            <span key={k.id} className="t-chip" onClick={(e) => e.stopPropagation()}>
-              {renderIcon(k.icon, 13, "📁")} {k.name}
+
+      {bm.description && <div className="card-desc">{bm.description}</div>}
+
+      {bm.tags.length > 0 && (
+        <div className="card-tags">
+          {bm.tags.map((t) => (
+            <span key={t.id} className="tag" style={{ borderColor: t.color }} onClick={(e) => { e.stopPropagation(); onTag?.(t.id); }}>
+              #{t.name}
             </span>
           ))}
-          {kids.length > 6 && <span className="t-chip">+{kids.length - 6}</span>}
         </div>
       )}
+
+      <div className="flags">
+        {bm.isFavorite && <span className="flag-fav">⭐</span>}
+        {bm.readLater && <span className="flag-rl">🔖</span>}
+      </div>
     </div>
   );
 }
 
-/* ============ Tarjeta de Carpeta ============ */
+/* ============ Tarjeta de carpeta (markup exacto de TabmeCode) ============ */
 export function FolderCard({ folder, store, onOpen, onEdit, onDelete, onNewSub }: {
   folder: TFolder; store: TabmeStore; onOpen: () => void; onEdit: () => void; onDelete: () => void; onNewSub: () => void;
 }) {
-  const [over, setOver] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [over, setOver] = useState(false);
   const kids = store.folders.filter((f) => f.parentId === folder.id);
   const bmCount = store.countIn(folder.id);
+  const favs = store.bookmarks.filter((b) => b.folderId === folder.id && b.isFavorite).slice(0, 5);
+
   return (
     <div
+      className={`folder-card${dragging ? " dragging" : ""}${over ? " drop-target" : ""}`}
       draggable
       onDragStart={(e) => { e.dataTransfer.setData("text/plain", `folder:${folder.id}`); e.dataTransfer.effectAllowed = "move"; setDragging(true); }}
       onDragEnd={() => setDragging(false)}
@@ -82,98 +116,100 @@ export function FolderCard({ folder, store, onOpen, onEdit, onDelete, onNewSub }
         }
       }}
       onClick={onOpen}
-      className={`t-card t-bm-card p-4 ${over ? "drop-target" : ""} ${dragging ? "dragging" : ""}`}
-      title="Abrir carpeta — arrastra para reordenar"
+      title="Abrir carpeta — arrastra para reordenar o suelta marcadores aquí"
     >
-      <div className="flex items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ background: "var(--card-2)" }}>
-          {renderIcon(folder.icon, 20, "📁")}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h4 className="truncate text-sm font-bold">{folder.name}</h4>
-          <p className="truncate text-[11.5px]" style={{ color: "var(--muted)" }}>
-            {bmCount} · {kids.length} sub
-          </p>
+      <div className="fc-band" />
+      <div className="fc-main">
+        <span className="fc-ico">{renderIcon(folder.icon, 30, "📁")}</span>
+        <div className="fc-info">
+          <div className="fc-name">{folder.name}</div>
+          <div className="fc-count">{bmCount} marcador{bmCount === 1 ? "" : "es"} · {kids.length} subcarpeta{kids.length === 1 ? "" : "s"}</div>
         </div>
-        <div className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
-          <button className="t-icon-btn" style={{ width: 30, height: 30 }} onClick={onNewSub} title="Nueva subcarpeta"><FolderPlus size={15} /></button>
-          <button className="t-icon-btn" style={{ width: 30, height: 30 }} onClick={onEdit} title="Editar"><Pencil size={14} /></button>
-          <button className="t-icon-btn" style={{ width: 30, height: 30 }} onClick={onDelete} title="Eliminar"><Trash2 size={14} /></button>
+        <div className="fc-actions" onClick={(e) => e.stopPropagation()}>
+          <button className="icon-btn" title="Nueva subcarpeta" onClick={onNewSub}>＋</button>
+          <button className="icon-btn" title="Editar" onClick={onEdit}>✎</button>
+          <button className="icon-btn danger" title="Eliminar" onClick={onDelete}>×</button>
+        </div>
+      </div>
+      {favs.length > 0 && (
+        <div className="fc-favs">
+          {favs.map((b) => (
+            <img key={b.id} src={favicon(b.domain)} alt="" loading="lazy" title={b.title} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ============ Tarjeta de space (home) ============ */
+export function SpaceCard({ space, store, onOpen }: { space: TSpace; store: TabmeStore; onOpen: () => void }) {
+  const [over, setOver] = useState(false);
+  const kids = store.folders.filter((f) => f.parentId === space.id);
+  const bmCount = store.countIn(space.id);
+  return (
+    <div
+      className={`folder-card${over ? " drop-target" : ""}`}
+      onClick={onOpen}
+      onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault(); e.stopPropagation(); setOver(false);
+        const raw = e.dataTransfer.getData("text/plain") || "";
+        if (raw.startsWith("bookmark:")) store.moveBookmark(raw.slice(9), space.id);
+      }}
+      title="Abrir space — puedes soltar marcadores aquí"
+    >
+      <div className="fc-band" />
+      <div className="fc-main">
+        <span className="fc-ico">{renderIcon(space.icon, 30, "📦")}</span>
+        <div className="fc-info">
+          <div className="fc-name">{space.name}</div>
+          <div className="fc-count">{kids.length} carpeta{kids.length === 1 ? "" : "s"} · {bmCount} marcador{bmCount === 1 ? "" : "es"}</div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ============ Tarjeta de Marcador ============ */
-export function BookmarkCard({ bm, store, onEdit, inTrash, onRestore, onDeleteForever }: {
-  bm: TBookmark; store: TabmeStore; onEdit: () => void; inTrash?: boolean; onRestore?: () => void; onDeleteForever?: () => void;
+/* ============ Tarjeta de cuenta / asistente ============ */
+function accountIcon(a: TAccount | TAssistant) {
+  if (a.iconType === "img" && a.icon) return <img src={a.icon} alt="" />;
+  if (a.iconType === "emoji" && a.icon) return <span>{a.icon}</span>;
+  if (a.url) return <img src={favicon(domainOf(a.url))} alt="" loading="lazy" />;
+  return <span>🔑</span>;
+}
+
+export function AccountCard({ acc, onOpen, onEdit, onDelete }: {
+  acc: TAccount; onOpen: () => void; onEdit: () => void; onDelete: () => void;
 }) {
-  const [dragging, setDragging] = useState(false);
-  const [imgOk, setImgOk] = useState(true);
   return (
-    <div
-      draggable={!inTrash}
-      onDragStart={(e) => { e.dataTransfer.setData("text/plain", `bookmark:${bm.id}`); e.dataTransfer.effectAllowed = "move"; setDragging(true); }}
-      onDragEnd={() => setDragging(false)}
-      className={`t-card t-bm-card flex flex-col p-4 ${dragging ? "dragging" : ""}`}
-      title={inTrash ? bm.title : "Arrastra a una carpeta para moverlo"}
-    >
-      <div className="mb-2.5 flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl" style={{ background: "var(--card-2)" }}>
-          {bm.icon ? <span className="text-xl">{renderIcon(bm.icon, 20, "🔖")}</span>
-            : imgOk ? <img src={favicon(bm.url, bm.domain)} alt="" className="h-5 w-5" onError={() => setImgOk(false)} loading="lazy" />
-            : <span className="text-lg">🔖</span>}
-        </span>
-        <div className="min-w-0 flex-1">
-          <a href={bm.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}
-            className="block truncate text-sm font-semibold hover:underline" style={{ color: "var(--text)" }}>
-            {bm.title}
-          </a>
-          <p className="truncate text-[11.5px]" style={{ color: "var(--muted)" }}>{bm.domain}</p>
-        </div>
-        <a href={bm.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="t-icon-btn shrink-0" style={{ width: 30, height: 30 }} title="Abrir">
-          <ExternalLink size={14} />
-        </a>
+    <div className="card ref-card" onClick={onOpen} title="Ver cuenta">
+      <div className="hover-actions" onClick={(e) => e.stopPropagation()}>
+        <button className="icon-btn" title="Editar" onClick={onEdit}>✎</button>
+        <button className="icon-btn danger" title="Eliminar" onClick={onDelete}>×</button>
       </div>
+      <div className="ref-logo">{accountIcon(acc)}</div>
+      <div className="ref-name">{acc.name}</div>
+      {acc.url && <div className="ref-domain">↗ {domainOf(acc.url)}</div>}
+      {(acc.username || acc.email || acc.note) && <div className="note-flag">📝 con datos</div>}
+    </div>
+  );
+}
 
-      {bm.description && <p className="mb-3 line-clamp-2 text-xs" style={{ color: "var(--muted)" }}>{bm.description}</p>}
-
-      {bm.tags.length > 0 && (
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {bm.tags.map((t) => (
-            <span key={t.id} className="t-chip" style={{ borderColor: t.color, color: t.color }}>#{t.name}</span>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-auto flex items-center justify-between border-t pt-2.5" style={{ borderColor: "var(--border)" }} onClick={(e) => e.stopPropagation()}>
-        {inTrash ? (
-          <>
-            <button onClick={onRestore} className="t-btn t-btn-ghost" style={{ minHeight: 34, padding: "6px 10px", fontSize: 12 }}>
-              <RotateCcw size={13} /> Restaurar
-            </button>
-            <button onClick={onDeleteForever} className="t-btn t-btn-danger" style={{ minHeight: 34, padding: "6px 10px", fontSize: 12 }}>
-              <Trash2 size={13} /> Eliminar
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="flex">
-              <button onClick={() => store.toggleFavorite(bm.id)} className={`t-icon-btn ${bm.isFavorite ? "on" : ""}`} title="Favorito">
-                <Star size={16} fill={bm.isFavorite ? "currentColor" : "none"} />
-              </button>
-              <button onClick={() => store.toggleReadLater(bm.id)} className={`t-icon-btn ${bm.readLater ? "on" : ""}`} title="Leer después">
-                <BookMarked size={16} />
-              </button>
-            </div>
-            <div className="flex">
-              <button onClick={onEdit} className="t-icon-btn" title="Editar"><Pencil size={15} /></button>
-              <button onClick={() => store.trashBookmark(bm.id)} className="t-icon-btn" title="Enviar a papelera"><Trash2 size={15} /></button>
-            </div>
-          </>
-        )}
+export function AssistantCard({ as, onOpen, onEdit, onDelete }: {
+  as: TAssistant; onOpen: () => void; onEdit: () => void; onDelete: () => void;
+}) {
+  return (
+    <div className="card ref-card" onClick={onOpen} title="Abrir asistente">
+      <div className="hover-actions" onClick={(e) => e.stopPropagation()}>
+        <button className="icon-btn" title="Editar" onClick={onEdit}>✎</button>
+        <button className="icon-btn danger" title="Eliminar" onClick={onDelete}>×</button>
       </div>
+      <div className="ref-logo">{accountIcon(as)}</div>
+      <div className="ref-name">{as.name}</div>
+      {as.url && <div className="ref-domain">↗ {domainOf(as.url)}</div>}
+      {as.note && <div className="note-flag">📝 {as.note}</div>}
     </div>
   );
 }

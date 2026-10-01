@@ -31,10 +31,14 @@ export default async function proxy(request: NextRequest) {
     }
   );
 
-  // IMPORTANTE: Refresca la sesión del usuario
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // IMPORTANTE: Refresca la sesión del usuario (si Supabase falla, se trata como "sin sesión")
+  let user = null as { id: string } | null;
+  try {
+    const res = await supabase.auth.getUser();
+    user = res.data.user;
+  } catch {
+    user = null;
+  }
 
   const path = request.nextUrl.pathname;
 

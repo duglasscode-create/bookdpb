@@ -1,4 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
 import { TabmeApp } from "@/components/tabme/TabmeApp";
 

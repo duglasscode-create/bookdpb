@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { logActivity } from "@/utils/activityLog";
 
 export type TSpace = { id: string; name: string; icon: string; color: string; position: number };
 export type TFolder = { id: string; name: string; icon: string; color: string; position: number; parentId: string };
@@ -13,6 +14,23 @@ export type TBookmark = {
 export type TNote = {
   id: string; title: string; content: string; color: string; pinned: boolean; updatedAt: string;
 };
+export type TAccount = {
+  id: string; name: string; url: string | null; username: string | null; email: string | null;
+  password: string | null; note: string | null; icon: string | null; iconType: string; position: number;
+};
+export type TAssistant = {
+  id: string; name: string; url: string | null; note: string | null;
+  icon: string | null; iconType: string; position: number;
+};
+export type TReminder = {
+  id: string; text: string; remindAt: string | null; color: string; icon: string; done: boolean; position: number;
+};
+export type TActivity = {
+  id: string; action: string; entityType: string | null; entityName: string | null; details: string | null; createdAt: string;
+};
+
+export const ITEM_ORDER_KEY = (userId: string) => `bookdpb-item-order-${userId}`;
+export const DEFAULT_ITEM_ORDER = ["favorites", "accounts", "assistants", "reminders", "history", "trash", "readlater"];
 
 export const TABME_PALETTE = [
   "#2dd4bf", "#0ea5a5", "#38bdf8", "#818cf8", "#a78bfa",
@@ -38,18 +56,26 @@ export function useTabme(userId: string) {
   const [trash, setTrash] = useState<TBookmark[]>([]);
   const [tags, setTags] = useState<TTag[]>([]);
   const [notes, setNotes] = useState<TNote[]>([]);
+  const [accounts, setAccounts] = useState<TAccount[]>([]);
+  const [assistants, setAssistants] = useState<TAssistant[]>([]);
+  const [reminders, setReminders] = useState<TReminder[]>([]);
+  const [activity, setActivity] = useState<TActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ data: cols }, { data: bms }, { data: rels }, { data: tgs }, { data: bt }, { data: nts }] = await Promise.all([
+      const [{ data: cols }, { data: bms }, { data: rels }, { data: tgs }, { data: bt }, { data: nts }, { data: acc }, { data: asi }, { data: rem }, { data: act }] = await Promise.all([
         supabase.from("collections").select("id, name, color, icon, position, parent_id").eq("user_id", userId).order("position", { ascending: true }),
         supabase.from("bookmarks").select("id, url, domain, title, description, icon, is_favorite, read_status, is_deleted, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5000),
         supabase.from("bookmark_collections").select("bookmark_id, collection_id").eq("user_id", userId),
         supabase.from("tags").select("id, name, color").eq("user_id", userId).order("name"),
         supabase.from("bookmark_tags").select("bookmark_id, tag_id").eq("user_id", userId),
         supabase.from("notes").select("id, title, content, color, pinned, updated_at").eq("user_id", userId).eq("deleted", false).order("pinned", { ascending: false }).order("updated_at", { ascending: false }).limit(500),
+        supabase.from("accounts").select("id, name, url, username, email, password, note, icon, icon_type, position").eq("user_id", userId).eq("is_deleted", false).order("position", { ascending: true }).limit(500),
+        supabase.from("assistants").select("id, name, url, note, icon, icon_type, position").eq("user_id", userId).eq("is_deleted", false).order("position", { ascending: true }).limit(500),
+        supabase.from("reminders").select("id, text, remind_at, color, icon, done, position").eq("user_id", userId).order("done", { ascending: true }).order("position", { ascending: true }).limit(500),
+        supabase.from("activity_log").select("id, action, entity_type, entity_name, details, created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(200),
       ]);
 
       const sp: TSpace[] = [];
@@ -91,6 +117,10 @@ export function useTabme(userId: string) {
       setTrash(del);
       setTags((tgs || []).map((t: any) => ({ id: t.id, name: t.name, color: t.color })));
       setNotes((nts || []).map((n: any) => ({ id: n.id, title: n.title || "Sin título", content: n.content || "", color: n.color || "default", pinned: !!n.pinned, updatedAt: n.updated_at })));
+      setAccounts((acc || []).map((a: any) => ({ id: a.id, name: a.name, url: a.url, username: a.username, email: a.email, password: a.password, note: a.note, icon: a.icon, iconType: a.icon_type || "auto", position: a.position ?? 0 })));
+      setAssistants((asi || []).map((a: any) => ({ id: a.id, name: a.name, url: a.url, note: a.note, icon: a.icon, iconType: a.icon_type || "auto", position: a.position ?? 0 })));
+      setReminders((rem || []).map((r: any) => ({ id: r.id, text: r.text, remindAt: r.remind_at, color: r.color || "default", icon: r.icon || "⏰", done: !!r.done, position: r.position ?? 0 })));
+      setActivity((act || []).map((a: any) => ({ id: a.id, action: a.action, entityType: a.entity_type, entityName: a.entity_name, details: a.details, createdAt: a.created_at })));
     } catch (e) {
       console.error("Error cargando datos:", e);
     }
@@ -127,6 +157,7 @@ export function useTabme(userId: string) {
     }).select("id").single();
     if (error) throw error;
     await load();
+    logActivity(supabase, userId, "collection_created", "collection", data.id as string, name.trim());
     return data.id as string;
   };
 
@@ -134,6 +165,7 @@ export function useTabme(userId: string) {
     const { error } = await supabase.from("collections").update(patch).eq("id", id).eq("user_id", userId);
     if (error) throw error;
     await load();
+    logActivity(supabase, userId, "collection_updated", "collection", id, patch.name || null);
   };
 
   const deleteCollection = async (id: string) => {
@@ -143,6 +175,7 @@ export function useTabme(userId: string) {
     if (bmIds.length) await supabase.from("bookmark_collections").delete().in("bookmark_id", bmIds).eq("user_id", userId);
     await supabase.from("collections").delete().in("id", ids).eq("user_id", userId);
     await load();
+    logActivity(supabase, userId, "collection_deleted", "collection", id, null);
   };
 
   const reorderCollections = async (orderedIds: string[]) => {
@@ -173,6 +206,8 @@ export function useTabme(userId: string) {
       folderId = kids.length ? kids[0].id : await ensureUnclassified(folderId);
     }
     await setBookmarkFolder(bookmarkId, folderId);
+    const b = bookmarks.find((x) => x.id === bookmarkId);
+    logActivity(supabase, userId, "bookmark_moved", "bookmark", bookmarkId, b?.title || null);
   };
 
   const createBookmark = async (input: { url: string; title: string; description?: string; icon?: string | null; spaceId?: string | null; folderId?: string | null; tagIds?: string[]; favorite?: boolean }) => {
@@ -190,6 +225,7 @@ export function useTabme(userId: string) {
     if (folderId) await supabase.from("bookmark_collections").insert({ bookmark_id: bid, collection_id: folderId, user_id: userId });
     if (input.tagIds?.length) await supabase.from("bookmark_tags").insert(input.tagIds.map((tagId) => ({ bookmark_id: bid, tag_id: tagId, user_id: userId })));
     await load();
+    logActivity(supabase, userId, "bookmark_added", "bookmark", bid, input.title.trim() || finalUrl);
     return bid;
   };
 
@@ -199,6 +235,7 @@ export function useTabme(userId: string) {
     const { error } = await supabase.from("bookmarks").update(full).eq("id", id).eq("user_id", userId);
     if (error) throw error;
     await load();
+    logActivity(supabase, userId, "bookmark_edited", "bookmark", id, patch.title || null);
   };
 
   const setBookmarkTags = async (bookmarkId: string, tagIds: string[]) => {
@@ -211,6 +248,7 @@ export function useTabme(userId: string) {
     const b = bookmarks.find((x) => x.id === id);
     await supabase.from("bookmarks").update({ is_favorite: !b?.isFavorite }).eq("id", id).eq("user_id", userId);
     await load();
+    logActivity(supabase, userId, b?.isFavorite ? "bookmark_unfavorited" : "bookmark_favorited", "bookmark", id, b?.title || null);
   };
 
   const toggleReadLater = async (id: string) => {
@@ -220,13 +258,17 @@ export function useTabme(userId: string) {
   };
 
   const trashBookmark = async (id: string) => {
+    const b = bookmarks.find((x) => x.id === id);
     await supabase.from("bookmarks").update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq("id", id).eq("user_id", userId);
     await load();
+    logActivity(supabase, userId, "bookmark_deleted", "bookmark", id, b?.title || null);
   };
 
   const restoreBookmark = async (id: string) => {
+    const b = trash.find((x) => x.id === id);
     await supabase.from("bookmarks").update({ is_deleted: false, deleted_at: null }).eq("id", id).eq("user_id", userId);
     await load();
+    logActivity(supabase, userId, "bookmark_restored", "bookmark", id, b?.title || null);
   };
 
   const deleteBookmarkForever = async (id: string) => {
@@ -273,14 +315,92 @@ export function useTabme(userId: string) {
     await load();
   };
 
+  // ===== Cuentas =====
+  const createAccount = async (input: { name: string; url?: string; username?: string; email?: string; password?: string; note?: string; icon?: string; iconType?: string }) => {
+    const { data, error } = await supabase.from("accounts").insert({
+      user_id: userId, name: input.name.trim(), url: input.url?.trim() || null,
+      username: input.username?.trim() || null, email: input.email?.trim() || null,
+      password: input.password || null, note: input.note?.trim() || null,
+      icon: input.icon || null, icon_type: input.iconType || "auto", position: accounts.length,
+    }).select("id").single();
+    if (error) throw error;
+    await load();
+    return data.id as string;
+  };
+
+  const updateAccount = async (id: string, patch: Partial<{ name: string; url: string | null; username: string | null; email: string | null; password: string | null; note: string | null; icon: string | null; iconType: string }>) => {
+    const dbPatch: any = { ...patch };
+    if (patch.iconType !== undefined) { dbPatch.icon_type = patch.iconType; delete dbPatch.iconType; }
+    const { error } = await supabase.from("accounts").update(dbPatch).eq("id", id).eq("user_id", userId);
+    if (error) throw error;
+    await load();
+  };
+
+  const deleteAccount = async (id: string) => {
+    await supabase.from("accounts").update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq("id", id).eq("user_id", userId);
+    await load();
+  };
+
+  // ===== Asistentes IA =====
+  const createAssistant = async (input: { name: string; url?: string; note?: string; icon?: string; iconType?: string }) => {
+    const { data, error } = await supabase.from("assistants").insert({
+      user_id: userId, name: input.name.trim(), url: input.url?.trim() || null,
+      note: input.note?.trim() || null, icon: input.icon || null, icon_type: input.iconType || "auto",
+      position: assistants.length,
+    }).select("id").single();
+    if (error) throw error;
+    await load();
+    return data.id as string;
+  };
+
+  const updateAssistant = async (id: string, patch: Partial<{ name: string; url: string | null; note: string | null; icon: string | null; iconType: string }>) => {
+    const dbPatch: any = { ...patch };
+    if (patch.iconType !== undefined) { dbPatch.icon_type = patch.iconType; delete dbPatch.iconType; }
+    const { error } = await supabase.from("assistants").update(dbPatch).eq("id", id).eq("user_id", userId);
+    if (error) throw error;
+    await load();
+  };
+
+  const deleteAssistant = async (id: string) => {
+    await supabase.from("assistants").update({ is_deleted: true, deleted_at: new Date().toISOString() }).eq("id", id).eq("user_id", userId);
+    await load();
+  };
+
+  // ===== Recordatorios =====
+  const createReminder = async (input: { text: string; remindAt?: string | null; color?: string; icon?: string }) => {
+    const { data, error } = await supabase.from("reminders").insert({
+      user_id: userId, text: input.text.trim(), remind_at: input.remindAt || null,
+      color: input.color || "default", icon: input.icon || "⏰", position: reminders.length,
+    }).select("id").single();
+    if (error) throw error;
+    await load();
+    return data.id as string;
+  };
+
+  const updateReminder = async (id: string, patch: Partial<{ text: string; remindAt: string | null; color: string; icon: string; done: boolean }>) => {
+    const dbPatch: any = { ...patch };
+    if (patch.remindAt !== undefined) { dbPatch.remind_at = patch.remindAt; delete dbPatch.remindAt; }
+    const { error } = await supabase.from("reminders").update(dbPatch).eq("id", id).eq("user_id", userId);
+    if (error) throw error;
+    await load();
+  };
+
+  const deleteReminder = async (id: string) => {
+    await supabase.from("reminders").delete().eq("id", id).eq("user_id", userId);
+    await load();
+  };
+
   // ===== Import / Export (formato Tabme) =====
   const exportData = () => {
     const data = {
-      app: "bookdpb", version: 1, exportedAt: new Date().toISOString(),
+      app: "bookdpb", version: 2, exportedAt: new Date().toISOString(),
       spaces: spaces.map((s) => ({ id: s.id, name: s.name, icon: s.icon, color: s.color, position: s.position })),
       folders: folders.map((f) => ({ id: f.id, spaceId: (() => { let p: string | undefined = f.parentId; const seen = new Set<string>(); while (p && !spaces.some((s) => s.id === p) && !seen.has(p)) { seen.add(p); p = folders.find((x) => x.id === p)?.parentId; } return p || null; })(), parentId: f.parentId, name: f.name, icon: f.icon, color: f.color, position: f.position })),
       bookmarks: bookmarks.map((b) => ({ id: b.id, url: b.url, title: b.title, description: b.description, icon: b.icon, folderId: b.folderId, isFavorite: b.isFavorite, readLater: b.readLater, tags: b.tags.map((t) => t.name) })),
       tags: tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
+      accounts: accounts.map((a) => ({ id: a.id, name: a.name, url: a.url, username: a.username, email: a.email, password: a.password, note: a.note, icon: a.icon, iconType: a.iconType })),
+      assistants: assistants.map((a) => ({ id: a.id, name: a.name, url: a.url, note: a.note, icon: a.icon, iconType: a.iconType })),
+      reminders: reminders.map((r) => ({ id: r.id, text: r.text, remindAt: r.remindAt, color: r.color, icon: r.icon, done: r.done })),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
@@ -321,13 +441,16 @@ export function useTabme(userId: string) {
   };
 
   return {
-    spaces, folders, bookmarks, trash, tags, notes, loading, load,
+    spaces, folders, bookmarks, trash, tags, notes, accounts, assistants, reminders, activity, loading, load,
     childrenOf, descendantsOf, bookmarksIn, countIn,
     createCollection, updateCollection, deleteCollection, reorderCollections, ensureUnclassified,
     setBookmarkFolder, moveBookmark, createBookmark, updateBookmark, setBookmarkTags,
     toggleFavorite, toggleReadLater, trashBookmark, restoreBookmark, deleteBookmarkForever, emptyTrash,
     createTag, deleteTag,
     createNote, updateNote, trashNote,
+    createAccount, updateAccount, deleteAccount,
+    createAssistant, updateAssistant, deleteAssistant,
+    createReminder, updateReminder, deleteReminder,
     exportData, importData,
   };
 }

@@ -2,14 +2,16 @@
 import { useState, useEffect } from "react";
 import { useTabme, type TBookmark } from "@/lib/tabme-store";
 import type { Sel } from "./types";
+import { Topbar } from "./Topbar";
 import { Sidebar } from "./Sidebar";
 import { MainView, type UIActions } from "./Views";
 import { NotesView } from "./NotesView";
 import {
   SaveBookmarkModal, EditBookmarkModal, CollectionModal,
   ConfirmModal, TagModal, SettingsModal,
+  AccountModal, AccountDetailModal, AssistantModal, ReminderModal,
+  NewItemModal, HelpModal,
 } from "./Modals";
-import { Menu, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -20,21 +22,13 @@ type ModalState =
   | { kind: "confirm"; title: string; message: string; dangerLabel: string; onYes: () => void }
   | { kind: "tag" }
   | { kind: "settings" }
+  | { kind: "account"; editId?: string }
+  | { kind: "accountDetail"; accountId: string }
+  | { kind: "assistant"; editId?: string }
+  | { kind: "reminder"; editId?: string }
+  | { kind: "newItem" }
+  | { kind: "help" }
   | null;
-
-function titleFor(sel: Sel): string {
-  switch (sel.kind) {
-    case "home": return "Inicio";
-    case "favorites": return "Favoritos";
-    case "readlater": return "Leer después";
-    case "uncategorized": return "Sin carpeta";
-    case "tags": return "Etiquetas";
-    case "trash": return "Papelera";
-    case "notes": return "Notas";
-    case "search": return "Buscar";
-    case "col": return "";
-  }
-}
 
 export function TabmeApp({ userId }: { userId: string }) {
   const store = useTabme(userId);
@@ -43,13 +37,12 @@ export function TabmeApp({ userId }: { userId: string }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<ModalState>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
   }, [theme]);
 
-  // Expandir spaces por defecto al cargar
   useEffect(() => {
     if (store.spaces.length && expanded.size === 0) {
       setExpanded(new Set(store.spaces.map((s) => s.id)));
@@ -91,44 +84,70 @@ export function TabmeApp({ userId }: { userId: string }) {
         },
       }),
     newTag: () => setModal({ kind: "tag" }),
+    newAccount: () => setModal({ kind: "account" }),
+    editAccount: (editId) => setModal({ kind: "account", editId }),
+    viewAccount: (accountId) => setModal({ kind: "accountDetail", accountId }),
+    newAssistant: () => setModal({ kind: "assistant" }),
+    editAssistant: (editId) => setModal({ kind: "assistant", editId }),
+    newReminder: () => setModal({ kind: "reminder" }),
+    editReminder: (editId) => setModal({ kind: "reminder", editId }),
     confirm: (title, message, dangerLabel, onYes) => setModal({ kind: "confirm", title, message, dangerLabel, onYes }),
   };
 
-  const colTitle = sel.kind === "col"
-    ? store.spaces.find((s) => s.id === sel.id)?.name || store.folders.find((f) => f.id === sel.id)?.name || ""
-    : titleFor(sel);
+  const newFolderHere = () => {
+    if (sel.kind === "col") {
+      const isSpace = store.spaces.some((s) => s.id === sel.id);
+      ui.newCollection(sel.id, !isSpace ? false : false);
+    } else {
+      ui.newCollection(store.spaces[0]?.id || null, false);
+    }
+  };
 
   return (
-    <div className="flex h-screen overflow-hidden" style={{ background: "var(--bg)" }}>
-      <Sidebar
-        store={store} sel={sel} onSelect={setSel}
-        expanded={expanded} onToggleExpand={toggleExpand}
-        onNewSpace={() => ui.newCollection(null, true)}
+    <div className="app-shell">
+      <Topbar
+        store={store}
+        onSelect={setSel}
+        onBackup={() => store.exportData()}
+        onDuplicates={() => setSel({ kind: "duplicates" })}
+        onNewFolder={newFolderHere}
         onNewBookmark={() => ui.newBookmark()}
+        onNewNote={async () => { const id = await store.createNote("Nueva nota"); setSel({ kind: "notes" }); }}
         onOpenSettings={() => setModal({ kind: "settings" })}
-        theme={theme} onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-        mobileOpen={mobileOpen} onCloseMobile={() => setMobileOpen(false)}
+        onLogout={logout}
+        onHelp={() => setModal({ kind: "help" })}
+        theme={theme}
+        onToggleTheme={() => setTheme((t) => (t === "light" ? "dark" : "light"))}
+        onMenu={() => setMobileOpen(true)}
       />
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b px-4 py-3" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-          <button className="t-icon-btn md:hidden" onClick={() => setMobileOpen(true)} title="Menú"><Menu size={19} /></button>
-          <h2 className="flex-1 truncate text-[15px] font-bold">{colTitle}</h2>
-          <button className="t-icon-btn" onClick={logout} title="Cerrar sesión"><LogOut size={17} /></button>
-        </header>
+      <div className="app-body">
+        <Sidebar
+          store={store}
+          userId={userId}
+          sel={sel}
+          onSelect={setSel}
+          expanded={expanded}
+          onToggleExpand={toggleExpand}
+          onNewSpace={() => ui.newCollection(null, true)}
+          onEditCollection={ui.editCollection}
+          onDeleteCollection={ui.deleteCollection}
+          onNewSub={(parentId) => ui.newCollection(parentId, false)}
+          onNewItem={() => setModal({ kind: "newItem" })}
+          mobileOpen={mobileOpen}
+          onCloseMobile={() => setMobileOpen(false)}
+        />
 
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="main">
           {store.loading ? (
-            <div className="flex h-64 items-center justify-center">
-              <p style={{ color: "var(--muted)" }}>Cargando tus spaces...</p>
-            </div>
+            <div className="empty"><span className="big">⏳</span>Cargando tus spaces...</div>
           ) : sel.kind === "notes" ? (
             <NotesView store={store} />
           ) : (
             <MainView store={store} ui={ui} sel={sel} />
           )}
-        </div>
-      </main>
+        </main>
+      </div>
 
       {modal?.kind === "saveBookmark" && <SaveBookmarkModal store={store} preset={modal.preset} onClose={() => setModal(null)} />}
       {modal?.kind === "editBookmark" && <EditBookmarkModal store={store} bm={modal.bm} onClose={() => setModal(null)} />}
@@ -140,8 +159,21 @@ export function TabmeApp({ userId }: { userId: string }) {
       )}
       {modal?.kind === "tag" && <TagModal store={store} onClose={() => setModal(null)} />}
       {modal?.kind === "settings" && (
-        <SettingsModal store={store} theme={theme} onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} onClose={() => setModal(null)} />
+        <SettingsModal store={store} theme={theme} onToggleTheme={() => setTheme((t) => (t === "light" ? "dark" : "light"))} onClose={() => setModal(null)} />
       )}
+      {modal?.kind === "account" && <AccountModal store={store} editId={modal.editId} onClose={() => setModal(null)} />}
+      {modal?.kind === "accountDetail" && (
+        <AccountDetailModal store={store} accountId={modal.accountId} onClose={() => setModal(null)} onEdit={() => setModal({ kind: "account", editId: modal.accountId })} />
+      )}
+      {modal?.kind === "assistant" && <AssistantModal store={store} editId={modal.editId} onClose={() => setModal(null)} />}
+      {modal?.kind === "reminder" && <ReminderModal store={store} editId={modal.editId} onClose={() => setModal(null)} />}
+      {modal?.kind === "newItem" && (
+        <NewItemModal
+          onClose={() => setModal(null)}
+          onPick={(k) => setModal(k === "account" ? { kind: "account" } : k === "assistant" ? { kind: "assistant" } : { kind: "reminder" })}
+        />
+      )}
+      {modal?.kind === "help" && <HelpModal onClose={() => setModal(null)} />}
     </div>
   );
 }

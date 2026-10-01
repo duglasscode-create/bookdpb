@@ -1,70 +1,77 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { TabmeStore, TFolder, TSpace } from "@/lib/tabme-store";
+import { ITEM_ORDER_KEY, DEFAULT_ITEM_ORDER } from "@/lib/tabme-store";
 import { selKey, type Sel } from "./types";
 import { renderIcon } from "./icons";
 
-import {
-  Home, Star, BookMarked, Inbox, Tags, NotebookPen, Trash2,
-  Plus, ChevronRight, Search, Sun, Moon, Settings, BookmarkPlus, X,
-} from "lucide-react";
-
 type Props = {
   store: TabmeStore;
+  userId: string;
   sel: Sel;
   onSelect: (s: Sel) => void;
   expanded: Set<string>;
   onToggleExpand: (id: string) => void;
   onNewSpace: () => void;
-  onNewBookmark: () => void;
-  onOpenSettings: () => void;
-  theme: "dark" | "light";
-  onToggleTheme: () => void;
+  onEditCollection: (id: string) => void;
+  onDeleteCollection: (id: string, name: string) => void;
+  onNewSub: (parentId: string) => void;
+  onNewItem: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 };
 
-export function Sidebar({ store, sel, onSelect, expanded, onToggleExpand, onNewSpace, onNewBookmark, onOpenSettings, theme, onToggleTheme, mobileOpen, onCloseMobile }: Props) {
-  const { spaces, folders, bookmarks, trash, tags, notes, countIn, moveBookmark, reorderCollections } = store;
-  const [search, setSearch] = useState("");
+const ITEM_DEFS: { key: string; icon: string; label: string; hint: string; sel: Sel }[] = [
+  { key: "favorites", icon: "⭐", label: "Favoritos", hint: "Marcadores con estrella", sel: { kind: "favorites" } },
+  { key: "accounts", icon: "🔑", label: "Cuentas", hint: "Cuentas de email, bancos, servicios…", sel: { kind: "accounts" } },
+  { key: "assistants", icon: "🤖", label: "Asistentes IA", hint: "Mis asistentes de IA", sel: { kind: "assistants" } },
+  { key: "reminders", icon: "⏰", label: "Recordatorios", hint: "Avisos con fecha y hora", sel: { kind: "reminders" } },
+  { key: "history", icon: "🕘", label: "Historial", hint: "Actividad reciente", sel: { kind: "history" } },
+  { key: "trash", icon: "🗑", label: "Papelera", hint: "Elementos eliminados (30 días)", sel: { kind: "trash" } },
+  { key: "readlater", icon: "🔖", label: "Leer después", hint: "Para leer más tarde", sel: { kind: "readlater" } },
+];
+
+export function Sidebar(p: Props) {
+  const { store, sel, onSelect, expanded, onToggleExpand } = p;
+  const { spaces, folders, bookmarks, trash, tags, notes, accounts, assistants, reminders, activity, countIn, moveBookmark, reorderCollections } = store;
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [itemsExpanded, setItemsExpanded] = useState(true);
+  const [dragItem, setDragItem] = useState<string | null>(null);
+  const [dropPos, setDropPos] = useState<{ key: string; pos: "before" | "after" } | null>(null);
 
-  const uncategorized = bookmarks.filter((b) => !b.folderId).length;
-  const favCount = bookmarks.filter((b) => b.isFavorite).length;
-  const rlCount = bookmarks.filter((b) => b.readLater).length;
+  /* Orden de las filas de Mis Items (persistido) */
+  const [itemOrder, setItemOrder] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(ITEM_ORDER_KEY(p.userId));
+      if (raw) {
+        const arr = JSON.parse(raw) as string[];
+        const valid = arr.filter((k) => DEFAULT_ITEM_ORDER.includes(k));
+        const rest = DEFAULT_ITEM_ORDER.filter((k) => !valid.includes(k));
+        return [...valid, ...rest];
+      }
+    } catch { /* noop */ }
+    return DEFAULT_ITEM_ORDER;
+  });
+  const saveOrder = (order: string[]) => {
+    setItemOrder(order);
+    try { localStorage.setItem(ITEM_ORDER_KEY(p.userId), JSON.stringify(order)); } catch { /* noop */ }
+  };
+  const orderedDefs = useMemo(() => itemOrder.map((k) => ITEM_DEFS.find((d) => d.key === k)!).filter(Boolean), [itemOrder]);
 
-  const navItem = (key: string, s: Sel, icon: React.ReactNode, label: string, count?: number) => (
-    <button
-      key={key}
-      onClick={() => { onSelect(s); onCloseMobile(); }}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(key); }}
-      onDragLeave={() => setDragOver((d) => (d === key ? null : d))}
-      onDrop={(e) => {
-        e.preventDefault(); e.stopPropagation(); setDragOver(null);
-        const raw = e.dataTransfer.getData("text/plain") || "";
-        if (raw.startsWith("bookmark:")) {
-          const folderId = key === "uncategorized" ? null : undefined;
-          if (folderId !== undefined) moveBookmark(raw.slice(9), folderId);
-        }
-      }}
-      className={`t-tree-row w-full ${selKey(sel) === key ? "active" : ""} ${dragOver === key ? "drop-target" : ""}`}
-    >
-      <span className="shrink-0">{icon}</span>
-      <span className="flex-1 truncate text-left">{label}</span>
-      {count !== undefined && count > 0 && (
-        <span className="rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: "var(--card-2)", color: "var(--muted)" }}>{count}</span>
-      )}
-    </button>
-  );
+  const counts: Record<string, number> = {
+    favorites: bookmarks.filter((b) => b.isFavorite).length,
+    accounts: accounts.length,
+    assistants: assistants.length,
+    reminders: reminders.filter((r) => !r.done).length,
+    history: activity.length,
+    trash: trash.length,
+    readlater: bookmarks.filter((b) => b.readLater).length,
+  };
 
   const handleRowDrop = (e: React.DragEvent, target: { kind: "space" | "folder"; id: string; parentId: string | null }) => {
     e.preventDefault(); e.stopPropagation(); setDragOver(null);
     const raw = e.dataTransfer.getData("text/plain") || "";
-    if (raw.startsWith("bookmark:")) {
-      moveBookmark(raw.slice(9), target.id);
-      return;
-    }
-    // Reordenar spaces o carpetas hermanas
+    if (raw.startsWith("bookmark:")) { moveBookmark(raw.slice(9), target.id); return; }
     const m = raw.match(/^(space|folder):(.+)$/);
     if (!m) return;
     const [, kind, dragId] = m;
@@ -82,34 +89,40 @@ export function Sidebar({ store, sel, onSelect, expanded, onToggleExpand, onNewS
     }
   };
 
+  const go = (s: Sel) => { onSelect(s); p.onCloseMobile(); };
+
   const renderFolder = (f: TFolder, depth: number) => {
     const kids = folders.filter((x) => x.parentId === f.id);
     const isExp = expanded.has(f.id);
     const key = `col:${f.id}`;
     return (
-      <div key={f.id}>
+      <li key={f.id}>
         <div
           draggable
           onDragStart={(e) => { e.dataTransfer.setData("text/plain", `folder:${f.id}`); e.dataTransfer.effectAllowed = "move"; }}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(key); }}
           onDragLeave={() => setDragOver((d) => (d === key ? null : d))}
           onDrop={(e) => handleRowDrop(e, { kind: "folder", id: f.id, parentId: f.parentId })}
-          onClick={() => { onSelect({ kind: "col", id: f.id }); onCloseMobile(); }}
-          className={`t-tree-row ${selKey(sel) === key ? "active" : ""} ${dragOver === key ? "drop-target" : ""}`}
-          style={{ paddingLeft: 8 + depth * 16 }}
-          title="Arrastra para reordenar o suelta marcadores aquí"
+          onClick={() => go({ kind: "col", id: f.id })}
+          className={`space-row${selKey(sel) === key ? " active" : ""}${dragOver === key ? " drop-target" : ""}`}
+          title={f.name}
         >
-          {kids.length > 0 ? (
-            <button onClick={(e) => { e.stopPropagation(); onToggleExpand(f.id); }} className="t-icon-btn" style={{ width: 24, height: 24 }} aria-label="Expandir">
-              <ChevronRight size={14} style={{ transform: isExp ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-            </button>
-          ) : <span style={{ width: 24 }} />}
-          <span className="shrink-0 text-[15px]">{renderIcon(f.icon, 15, "📁")}</span>
-          <span className="flex-1 truncate">{f.name}</span>
-          {countIn(f.id) > 0 && <span className="text-[11px]" style={{ color: "var(--muted)" }}>{countIn(f.id)}</span>}
+          <span className="chev" onClick={(e) => { e.stopPropagation(); if (kids.length) onToggleExpand(f.id); }}>
+            {kids.length ? (isExp ? "▾" : "▸") : ""}
+          </span>
+          <span className="space-ico">{renderIcon(f.icon, 15, "📁")}</span>
+          <span className="side-name">{f.name}</span>
+          {countIn(f.id) > 0 && <span className="count">{countIn(f.id)}</span>}
+          <span className="row-actions" onClick={(e) => e.stopPropagation()}>
+            <button className="icon-btn" title="Nueva subcarpeta" onClick={() => p.onNewSub(f.id)}>＋</button>
+            <button className="icon-btn" title="Editar" onClick={() => p.onEditCollection(f.id)}>✎</button>
+            <button className="icon-btn danger" title="Eliminar" onClick={() => p.onDeleteCollection(f.id, f.name)}>×</button>
+          </span>
         </div>
-        {isExp && kids.map((k) => renderFolder(k, depth + 1))}
-      </div>
+        {isExp && kids.length > 0 && (
+          <ul className="sub-tree">{kids.map((k) => renderFolder(k, depth + 1))}</ul>
+        )}
+      </li>
     );
   };
 
@@ -118,102 +131,161 @@ export function Sidebar({ store, sel, onSelect, expanded, onToggleExpand, onNewS
     const isExp = expanded.has(s.id);
     const key = `col:${s.id}`;
     return (
-      <div key={s.id}>
+      <li key={s.id}>
         <div
           draggable
           onDragStart={(e) => { e.dataTransfer.setData("text/plain", `space:${s.id}`); e.dataTransfer.effectAllowed = "move"; }}
           onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragOver(key); }}
           onDragLeave={() => setDragOver((d) => (d === key ? null : d))}
           onDrop={(e) => handleRowDrop(e, { kind: "space", id: s.id, parentId: null })}
-          onClick={() => { onSelect({ kind: "col", id: s.id }); onCloseMobile(); }}
-          className={`t-tree-row ${selKey(sel) === key ? "active" : ""} ${dragOver === key ? "drop-target" : ""}`}
-          title="Arrastra para reordenar o suelta marcadores aquí"
+          onClick={() => go({ kind: "col", id: s.id })}
+          className={`space-row${selKey(sel) === key ? " active" : ""}${dragOver === key ? " drop-target" : ""}`}
+          title={s.name}
         >
-          {kids.length > 0 ? (
-            <button onClick={(e) => { e.stopPropagation(); onToggleExpand(s.id); }} className="t-icon-btn" style={{ width: 24, height: 24 }} aria-label="Expandir">
-              <ChevronRight size={14} style={{ transform: isExp ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
-            </button>
-          ) : <span style={{ width: 24 }} />}
-          <span className="shrink-0 text-[15px]">{renderIcon(s.icon, 15, "📦")}</span>
-          <span className="flex-1 truncate font-semibold">{s.name}</span>
-          {countIn(s.id) > 0 && <span className="text-[11px]" style={{ color: "var(--muted)" }}>{countIn(s.id)}</span>}
+          <span className="chev" onClick={(e) => { e.stopPropagation(); onToggleExpand(s.id); }}>
+            {isExp ? "▾" : "▸"}
+          </span>
+          <span className="space-ico">{renderIcon(s.icon, 15, "📦")}</span>
+          <span className="side-name">{s.name}</span>
+          {countIn(s.id) > 0 && <span className="count">{countIn(s.id)}</span>}
+          <span className="row-actions" onClick={(e) => e.stopPropagation()}>
+            <button className="icon-btn" title="Nueva carpeta" onClick={() => p.onNewSub(s.id)}>＋</button>
+            <button className="icon-btn" title="Editar" onClick={() => p.onEditCollection(s.id)}>✎</button>
+            <button className="icon-btn danger" title="Eliminar" onClick={() => p.onDeleteCollection(s.id, s.name)}>×</button>
+          </span>
         </div>
-        {isExp && <div className="mt-0.5 space-y-0.5">{kids.map((k) => renderFolder(k, 1))}</div>}
-      </div>
+        {isExp && <ul className="sub-tree">{kids.map((k) => renderFolder(k, 1))}</ul>}
+      </li>
     );
   };
 
+  /* Drag & drop de las filas de Mis Items */
+  const onItemDragStart = (e: React.DragEvent, key: string) => {
+    e.dataTransfer.setData("text/plain", `itemrow:${key}`);
+    e.dataTransfer.effectAllowed = "move";
+    setDragItem(key);
+  };
+  const onItemDragOver = (e: React.DragEvent, key: string) => {
+    if (!dragItem || dragItem === key) return;
+    e.preventDefault(); e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const pos = e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    setDropPos({ key, pos });
+  };
+  const onItemDrop = (e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    if (dragItem && dropPos) {
+      const next = itemOrder.filter((k) => k !== dragItem);
+      const idx = next.indexOf(dropPos.key) + (dropPos.pos === "after" ? 1 : 0);
+      next.splice(idx, 0, dragItem);
+      saveOrder(next);
+    }
+    setDragItem(null); setDropPos(null);
+  };
+
+  const uncatCount = bookmarks.filter((b) => !b.folderId).length;
+
   const body = (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 px-4 pb-3 pt-4">
-        <span className="text-xl">🗂️</span>
-        <h1 className="flex-1 text-[17px] font-bold tracking-tight">BookDPB</h1>
-        <button className="t-icon-btn" onClick={onToggleTheme} title={theme === "dark" ? "Modo claro" : "Modo oscuro"}>
-          {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
-        </button>
-        <button className="t-icon-btn" onClick={onOpenSettings} title="Ajustes, importar/exportar">
-          <Settings size={17} />
-        </button>
-        <button className="t-icon-btn md:hidden" onClick={onCloseMobile} title="Cerrar"><X size={17} /></button>
-      </div>
+    <div className="side-scroll">
+      <div className="pin-row"><span>📌</span><span>Fijado</span></div>
 
-      <div className="px-3 pb-2">
-        <div className="relative">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--muted)" }} />
-          <input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); if (e.target.value.trim()) onSelect({ kind: "search", q: e.target.value.trim() }); else if (sel.kind === "search") onSelect({ kind: "home" }); }}
-            placeholder="Buscar marcadores..."
-            className="t-input"
-            style={{ paddingLeft: 34 }}
-          />
+      <section className="side-section">
+        <div className="side-head">
+          <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
+          <span className="h3-label">Spaces</span>
+          <button className="mini-btn" title="Crear space" onClick={p.onNewSpace}>＋</button>
         </div>
-      </div>
-
-      <div className="flex-1 space-y-0.5 overflow-y-auto px-3 pb-3">
-        {navItem("home", { kind: "home" }, <Home size={16} />, "Inicio")}
-        {navItem("favorites", { kind: "favorites" }, <Star size={16} />, "Favoritos", favCount)}
-        {navItem("readlater", { kind: "readlater" }, <BookMarked size={16} />, "Leer después", rlCount)}
-        {navItem("uncategorized", { kind: "uncategorized" }, <Inbox size={16} />, "Sin carpeta", uncategorized)}
-        {navItem("tags", { kind: "tags" }, <Tags size={16} />, "Etiquetas", tags.length)}
-        {navItem("notes", { kind: "notes" }, <NotebookPen size={16} />, "Notas", notes.length)}
-        {navItem("trash", { kind: "trash" }, <Trash2 size={16} />, "Papelera", trash.length)}
-
-        <div className="flex items-center justify-between px-2 pb-1 pt-4">
-          <span className="t-section-title" style={{ margin: 0 }}>Spaces</span>
-          <button onClick={onNewSpace} className="t-icon-btn" style={{ width: 28, height: 28 }} title="Nuevo space">
-            <Plus size={16} />
-          </button>
-        </div>
+        <ul className="space-tree">
+          {spaces.map(renderSpace)}
+        </ul>
         {spaces.length === 0 && (
-          <p className="px-2 py-3 text-[13px]" style={{ color: "var(--muted)" }}>
-            Sin spaces. Crea uno con ＋.
-          </p>
+          <p style={{ padding: "6px 10px", fontSize: 13, color: "var(--muted)" }}>Sin spaces. Crea uno con ＋.</p>
         )}
-        <div className="space-y-0.5">{spaces.map(renderSpace)}</div>
-      </div>
+      </section>
 
-      <div className="border-t p-3" style={{ borderColor: "var(--border)" }}>
-        <button onClick={onNewBookmark} className="t-btn t-btn-primary w-full">
-          <BookmarkPlus size={16} /> Guardar marcador
+      <section className="side-section">
+        <button className={`link-btn${sel.kind === "allfolders" ? " active" : ""}`} onClick={() => go({ kind: "allfolders" })}>
+          <span>🗂</span><span>Todas las carpetas</span>
         </button>
-      </div>
+        <button className={`link-btn${sel.kind === "uncategorized" ? " active" : ""}`} onClick={() => go({ kind: "uncategorized" })}>
+          <span>📥</span><span>Sin carpeta</span>
+          {uncatCount > 0 && <span className="count">{uncatCount}</span>}
+        </button>
+        <button className={`link-btn${sel.kind === "notes" ? " active" : ""}`} onClick={() => go({ kind: "notes" })}>
+          <span>📝</span><span>Notas</span>
+          {notes.length > 0 && <span className="count">{notes.length}</span>}
+        </button>
+      </section>
+
+      <section className="side-section">
+        <ul className="item-tree">
+          <li>
+            <div
+              className={`item-head${sel.kind === "misitems" ? " active" : ""}`}
+              title="Ver todos mis items"
+              onClick={(e) => {
+                const t = e.target as HTMLElement;
+                if (t.closest("[data-act='add']")) { e.stopPropagation(); p.onNewItem(); return; }
+                if (t.closest(".chev")) { e.stopPropagation(); setItemsExpanded((v) => !v); return; }
+                if (t.closest(".sec-grip")) return;
+                go({ kind: "misitems" });
+              }}
+            >
+              <span className="chev">{itemsExpanded ? "▾" : "▸"}</span>
+              <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
+              <span className="side-name">🗂 MIS ITEMS</span>
+              <span className="icon-btn item-add" data-act="add" title="Nuevo item">＋</span>
+            </div>
+            {itemsExpanded && (
+              <ul className="item-rows" onDragOver={(e) => e.preventDefault()} onDrop={onItemDrop} onDragLeave={() => setDropPos(null)}>
+                {orderedDefs.map((d) => (
+                  <li key={d.key}>
+                    <div
+                      className={`item-row${selKey(sel) === d.key ? " active" : ""}${dragItem === d.key ? " dragging" : ""}${dropPos?.key === d.key ? (dropPos.pos === "before" ? " drop-before" : " drop-after") : ""}`}
+                      draggable
+                      onDragStart={(e) => onItemDragStart(e, d.key)}
+                      onDragOver={(e) => onItemDragOver(e, d.key)}
+                      onDragEnd={() => { setDragItem(null); setDropPos(null); }}
+                      onClick={() => go(d.sel)}
+                      title={`${d.hint} — arrastra para reordenar`}
+                    >
+                      <span className="item-ico">{d.icon}</span>
+                      <span className="side-name">{d.label}</span>
+                      <span className="count">{counts[d.key]}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        </ul>
+      </section>
+
+      <section className="side-section">
+        <div className="side-head">
+          <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
+          <span className="h3-label">Etiquetas</span>
+        </div>
+        <div className="tag-list">
+          {tags.map((t) => (
+            <button
+              key={t.id}
+              className={`tag-chip${sel.kind === "tags" && sel.tagId === t.id ? " active" : ""}`}
+              onClick={() => go({ kind: "tags", tagId: t.id })}
+            >
+              <span className="dot" style={{ background: t.color }} />#{t.name}
+            </button>
+          ))}
+          {tags.length === 0 && <span style={{ fontSize: 12.5, color: "var(--muted)" }}>Sin etiquetas</span>}
+        </div>
+      </section>
     </div>
   );
 
   return (
     <>
-      <aside className="hidden w-[264px] shrink-0 flex-col border-r md:flex" style={{ borderColor: "var(--border)", background: "var(--card)" }}>
-        {body}
-      </aside>
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={onCloseMobile} />
-          <aside className="absolute bottom-0 left-0 top-0 w-[300px] max-w-[85vw]" style={{ background: "var(--card)" }}>
-            {body}
-          </aside>
-        </div>
-      )}
+      <aside className={`sidebar${p.mobileOpen ? " mobile-open" : ""}`}>{body}</aside>
+      {p.mobileOpen && <div className="mobile-scrim" onClick={p.onCloseMobile} />}
     </>
   );
 }
