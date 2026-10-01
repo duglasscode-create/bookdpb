@@ -2,6 +2,8 @@
 import { useState, useEffect, useRef } from "react";
 import { TABME_PALETTE, type TabmeStore, type TBookmark } from "@/lib/tabme-store";
 import { X, Star, Download, Upload, Moon, Sun } from "lucide-react";
+import { iconText } from "./icons";
+
 
 function Shell({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   return (
@@ -32,7 +34,7 @@ export function folderOptions(store: TabmeStore, spaceId: string | null): { id: 
   const out: { id: string; label: string }[] = [];
   const walk = (parentId: string, depth: number) => {
     store.folders.filter((f) => f.parentId === parentId).forEach((f) => {
-      out.push({ id: f.id, label: `${"— ".repeat(depth)}${f.icon || "📁"} ${f.name}` });
+      out.push({ id: f.id, label: `${"— ".repeat(depth)}${iconText(f.icon, "📁")} ${f.name}` });
       walk(f.id, depth + 1);
     });
   };
@@ -93,7 +95,7 @@ export function SaveBookmarkModal({ store, onClose, preset }: {
       <div className="grid grid-cols-2 gap-3">
         <Field label="Space">
           <select className="t-input" value={spaceId} onChange={(e) => { setSpaceId(e.target.value); setFolderId(""); }}>
-            {store.spaces.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
+            {store.spaces.map((s) => <option key={s.id} value={s.id}>{iconText(s.icon, "📦")} {s.name}</option>)}
           </select>
         </Field>
         <Field label="Carpeta">
@@ -158,7 +160,7 @@ export function EditBookmarkModal({ store, bm, onClose }: { store: TabmeStore; b
       <div className="grid grid-cols-2 gap-3">
         <Field label="Space">
           <select className="t-input" value={spaceId} onChange={(e) => { setSpaceId(e.target.value); setFolderId(""); }}>
-            {store.spaces.map((s) => <option key={s.id} value={s.id}>{s.icon} {s.name}</option>)}
+            {store.spaces.map((s) => <option key={s.id} value={s.id}>{iconText(s.icon, "📦")} {s.name}</option>)}
           </select>
         </Field>
         <Field label="Carpeta">

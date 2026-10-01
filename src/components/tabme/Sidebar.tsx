@@ -2,6 +2,8 @@
 import { useState } from "react";
 import type { TabmeStore, TFolder, TSpace } from "@/lib/tabme-store";
 import { selKey, type Sel } from "./types";
+import { renderIcon } from "./icons";
+
 import {
   Home, Star, BookMarked, Inbox, Tags, NotebookPen, Trash2,
   Plus, ChevronRight, Search, Sun, Moon, Settings, BookmarkPlus, X,
@@ -102,7 +104,7 @@ export function Sidebar({ store, sel, onSelect, expanded, onToggleExpand, onNewS
               <ChevronRight size={14} style={{ transform: isExp ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
             </button>
           ) : <span style={{ width: 24 }} />}
-          <span className="shrink-0 text-[15px]">{f.icon || "📁"}</span>
+          <span className="shrink-0 text-[15px]">{renderIcon(f.icon, 15, "📁")}</span>
           <span className="flex-1 truncate">{f.name}</span>
           {countIn(f.id) > 0 && <span className="text-[11px]" style={{ color: "var(--muted)" }}>{countIn(f.id)}</span>}
         </div>
@@ -132,7 +134,7 @@ export function Sidebar({ store, sel, onSelect, expanded, onToggleExpand, onNewS
               <ChevronRight size={14} style={{ transform: isExp ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
             </button>
           ) : <span style={{ width: 24 }} />}
-          <span className="shrink-0 text-[15px]">{s.icon || "📦"}</span>
+          <span className="shrink-0 text-[15px]">{renderIcon(s.icon, 15, "📦")}</span>
           <span className="flex-1 truncate font-semibold">{s.name}</span>
           {countIn(s.id) > 0 && <span className="text-[11px]" style={{ color: "var(--muted)" }}>{countIn(s.id)}</span>}
         </div>

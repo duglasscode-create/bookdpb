@@ -2,6 +2,8 @@
 import { useState } from "react";
 import type { TSpace, TFolder, TBookmark, TabmeStore } from "@/lib/tabme-store";
 import { Star, BookMarked, Pencil, Trash2, ExternalLink, FolderPlus, RotateCcw } from "lucide-react";
+import { renderIcon } from "./icons";
+
 
 export function favicon(url: string, domain: string) {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
@@ -27,7 +29,7 @@ export function SpaceCard({ space, store, onOpen }: { space: TSpace; store: Tabm
     >
       <div className="mb-3 flex items-center gap-3">
         <span className="flex h-11 w-11 items-center justify-center rounded-xl text-2xl" style={{ background: "var(--card-2)" }}>
-          {space.icon || "📦"}
+          {renderIcon(space.icon, 22, "📦")}
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-[15px] font-bold">{space.name}</h3>
@@ -40,7 +42,7 @@ export function SpaceCard({ space, store, onOpen }: { space: TSpace; store: Tabm
         <div className="flex flex-wrap gap-1.5">
           {kids.slice(0, 6).map((k) => (
             <span key={k.id} className="t-chip" onClick={(e) => e.stopPropagation()}>
-              {k.icon || "📁"} {k.name}
+              {renderIcon(k.icon, 13, "📁")} {k.name}
             </span>
           ))}
           {kids.length > 6 && <span className="t-chip">+{kids.length - 6}</span>}
@@ -85,7 +87,7 @@ export function FolderCard({ folder, store, onOpen, onEdit, onDelete, onNewSub }
     >
       <div className="flex items-center gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-xl" style={{ background: "var(--card-2)" }}>
-          {folder.icon || "📁"}
+          {renderIcon(folder.icon, 20, "📁")}
         </span>
         <div className="min-w-0 flex-1">
           <h4 className="truncate text-sm font-bold">{folder.name}</h4>
@@ -119,7 +121,7 @@ export function BookmarkCard({ bm, store, onEdit, inTrash, onRestore, onDeleteFo
     >
       <div className="mb-2.5 flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl" style={{ background: "var(--card-2)" }}>
-          {bm.icon ? <span className="text-xl">{bm.icon}</span>
+          {bm.icon ? <span className="text-xl">{renderIcon(bm.icon, 20, "🔖")}</span>
             : imgOk ? <img src={favicon(bm.url, bm.domain)} alt="" className="h-5 w-5" onError={() => setImgOk(false)} loading="lazy" />
             : <span className="text-lg">🔖</span>}
         </span>

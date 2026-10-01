@@ -3,6 +3,8 @@ import type { TabmeStore, TBookmark, TFolder } from "@/lib/tabme-store";
 import { selKey, type Sel } from "./types";
 import { SpaceCard, FolderCard, BookmarkCard } from "./Cards";
 import { Plus, Pencil, Trash2, FolderPlus, BookmarkPlus, ChevronRight, X } from "lucide-react";
+import { renderIcon } from "./icons";
+
 
 export type UIActions = {
   select: (s: Sel) => void;
@@ -47,7 +49,7 @@ function Breadcrumb({ store, id, select }: { store: TabmeStore; id: string; sele
             className={`t-crumb ${i === crumbs.length - 1 ? "current" : ""}`}
             onClick={() => i < crumbs.length - 1 && select({ kind: "col", id: c.id })}
           >
-            {c.icon} {c.name}
+            {renderIcon(c.icon, 13, "📁")} {c.name}
           </button>
         </span>
       ))}
@@ -113,7 +115,7 @@ export function CollectionView({ store, ui, id }: { store: TabmeStore; ui: UIAct
       <Breadcrumb store={store} id={id} select={ui.select} />
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <span className="flex h-12 w-12 items-center justify-center rounded-2xl text-3xl" style={{ background: "var(--card)" }}>
-          {current.icon || (isSpace ? "📦" : "📁")}
+          {renderIcon(current.icon, 26, isSpace ? "📦" : "📁")}
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-xl font-bold tracking-tight">{current.name}</h2>
@@ -270,8 +272,8 @@ export function SearchView({ store, ui, q }: { store: TabmeStore; ui: UIActions;
         <div className="mb-6">
           <p className="t-section-title">Spaces y carpetas</p>
           <div className="flex flex-wrap gap-2">
-            {sps.map((s) => <button key={s.id} className="t-chip" onClick={() => ui.select({ kind: "col", id: s.id })}>{s.icon || "📦"} {s.name}</button>)}
-            {fols.map((f) => <button key={f.id} className="t-chip" onClick={() => ui.select({ kind: "col", id: f.id })}>{f.icon || "📁"} {f.name}</button>)}
+            {sps.map((s) => <button key={s.id} className="t-chip" onClick={() => ui.select({ kind: "col", id: s.id })}>{renderIcon(s.icon, 13, "📦")} {s.name}</button>)}
+            {fols.map((f) => <button key={f.id} className="t-chip" onClick={() => ui.select({ kind: "col", id: f.id })}>{renderIcon(f.icon, 13, "📁")} {f.name}</button>)}
           </div>
         </div>
       )}
