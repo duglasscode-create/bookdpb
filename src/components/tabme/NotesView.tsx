@@ -1,111 +1,414 @@
+/* BookDPB — NotesView.tsx
+   Vista de notas, portada literalmente de TabmeCode v1.6.3 (newtab.js:
+   renderNotesView, notesCardsHTML, noteCardHTML, noteRowHTML, armNoteCards,
+   armNoteRows, notePopover). El editor ('note') y la vista completa
+   ('noteFull') viven en Modals.tsx; aquí solo se abren con openModal. */
 "use client";
-import { useState, useEffect, useRef } from "react";
-import type { TabmeStore } from "@/lib/tabme-store";
-import { Plus, Pin, Trash2, Search, ArrowLeft } from "lucide-react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
+import * as T from "@/lib/tc";
+import { useTC } from "@/lib/tc-store";
+import { useApp } from "./tc-ui";
 
-const NOTE_COLORS: Record<string, string> = {
-  default: "var(--card)", yellow: "#fef3c7", green: "#d1fae5", blue: "#dbeafe", pink: "#fce7f3", purple: "#ede9fe",
-};
+export function NotesView() {
+  const app = useApp();
+  const { ui, setUi } = app;
+  const counts = app.noteCounts();
+  const mode = app.getViewMode("notes");
+  const list = app.visibleNotes();
+  const [pop, setPop] = useState<{ id: string; rect: DOMRect } | null>(null);
 
-export function NotesView({ store }: { store: TabmeStore }) {
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [color, setColor] = useState("default");
-  const timer = useRef<any>(null);
+  const tabs: [string, string, number][] = [
+    ["all", "Notas", counts.all],
+    ["archived", "Archivadas", counts.archived],
+    ["trash", "Papelera", counts.trash],
+  ];
 
-  const active = store.notes.find((n) => n.id === activeId) || null;
-  const filtered = store.notes.filter((n) =>
-    n.title.toLowerCase().includes(search.toLowerCase()) || n.content.toLowerCase().includes(search.toLowerCase())
-  );
-
-  useEffect(() => {
-    if (active) { setTitle(active.title); setContent(active.content); setColor(active.color); }
-  }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const scheduleSave = (patch: { title?: string; content?: string; color?: string }) => {
-    if (!activeId) return;
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => store.updateNote(activeId, patch), 600);
-  };
-
-  const newNote = async () => {
-    const id = await store.createNote("Nueva nota");
-    setActiveId(id);
-  };
-
-  const list = (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 p-3">
-        <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--muted)" }} />
-          <input className="t-input" style={{ paddingLeft: 32, fontSize: 13 }} placeholder="Buscar notas..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
-        <button className="t-btn t-btn-primary" style={{ minHeight: 38, padding: "8px 10px" }} onClick={newNote} title="Nueva nota"><Plus size={16} /></button>
+  return (
+    <>
+      <div id="viewTitle">
+        <span className="pg-ico">📝</span>
+        <span>Notas</span>
       </div>
-      <div className="flex-1 space-y-1.5 overflow-y-auto p-3 pt-0">
-        {filtered.map((n) => (
-          <button key={n.id} onClick={() => setActiveId(n.id)}
-            className="w-full rounded-xl border p-3 text-left transition"
-            style={{
-              background: NOTE_COLORS[n.color] || "var(--card)",
-              borderColor: activeId === n.id ? "var(--accent)" : "var(--border)",
-              color: n.color === "default" ? "var(--text)" : "#1c1e26",
-            }}>
-            <p className="truncate text-sm font-semibold">{n.pinned ? "📌 " : ""}{n.title}</p>
-            <p className="mt-0.5 line-clamp-2 text-xs opacity-70">{n.content.slice(0, 120) || "Sin contenido"}</p>
+      <div id="viewMeta">
+        <div className="pg-sub">Notas enriquecidas con adjuntos</div>
+        <div className="pg-subline">{counts.all + counts.archived} nota(s) · Arrastra para reordenar</div>
+      </div>
+      <div id="viewActions"></div>
+      <div id="notesToolbar">
+        <div className="nt-tabs">
+          {tabs.map((t) => (
+            <button
+              key={t[0]}
+              className={"nt-tab" + (ui.notesTab === t[0] ? " active" : "")}
+              data-tab={t[0]}
+              onClick={() => setUi({ notesTab: t[0] as "all" | "archived" | "trash" })}
+            >
+              {t[1]} ({t[2]})
+            </button>
+          ))}
+        </div>
+        <NotesSearch />
+        <ViewToolbar />
+        <button className="btn blue" id="ntNew" onClick={() => app.openModal("note", {})}>
+          + Nueva nota
+        </button>
+      </div>
+      <div id="cards">
+        <div id="notesGridWrap">
+          <NotesGrid list={list} mode={mode} onOpts={(id, anchor) =>
+            setPop({ id, rect: anchor.getBoundingClientRect() })
+          } />
+        </div>
+      </div>
+      <div id="emptyState" className="hidden"></div>
+      {pop && (
+        <NotePopover
+          noteId={pop.id}
+          rect={pop.rect}
+          notes={list}
+          onClose={() => setPop(null)}
+        />
+      )}
+    </>
+  );
+}
+
+/* Buscador de notas con debounce (no pierde el foco al re-renderizar) */
+function NotesSearch() {
+  const { ui, setUi } = useApp();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return (
+    <div className="nt-search">
+      <span>🔎</span>
+      <input
+        id="ntQuery"
+        type="text"
+        placeholder="Buscar en notas…"
+        defaultValue={ui.notesQuery}
+        autoComplete="off"
+        spellCheck={false}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (timer.current) clearTimeout(timer.current);
+          timer.current = setTimeout(() => setUi({ notesQuery: v }), 250);
+        }}
+      />
+    </div>
+  );
+}
+
+/* Barra de vistas + zoom (viewToolbarHTML / wireViewToolbar literales) */
+function ViewToolbar() {
+  const { getViewMode, setViewMode, getZoom, setZoom } = useApp();
+  const cur = getViewMode("notes");
+  return (
+    <div className="vt-wrap">
+      <div className="vt-seg" role="group" aria-label="Modo de vista">
+        {T.VIEW_MODES.map((m) => (
+          <button
+            key={m[0]}
+            className={"vt-btn" + (cur === m[0] ? " active" : "")}
+            data-vm={m[0]}
+            title={m[2]}
+            onClick={() => setViewMode("notes", m[0])}
+          >
+            <span className="vt-ico">{m[1]}</span>
+            <span className="vt-lbl">{m[2]}</span>
           </button>
         ))}
-        {filtered.length === 0 && <p className="py-8 text-center text-sm" style={{ color: "var(--muted)" }}>Sin notas.</p>}
+      </div>
+      <div className="vt-zoom">
+        <button className="vt-zbtn" data-zoom="out" title="Reducir tamaño" onClick={() => setZoom(-0.1)}>
+          −
+        </button>
+        <span className="vt-zv">{Math.round(getZoom() * 100)}%</span>
+        <button className="vt-zbtn" data-zoom="in" title="Aumentar tamaño" onClick={() => setZoom(0.1)}>
+          +
+        </button>
       </div>
     </div>
   );
+}
 
-  const editor = active ? (
-    <div className="flex h-full flex-col p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <button className="t-icon-btn lg:hidden" onClick={() => setActiveId(null)}><ArrowLeft size={17} /></button>
-        <input className="t-input flex-1" style={{ fontSize: 16, fontWeight: 700 }} value={title}
-          onChange={(e) => { setTitle(e.target.value); scheduleSave({ title: e.target.value }); }} placeholder="Título" />
-        <button className={`t-icon-btn ${active.pinned ? "on" : ""}`} title="Fijar" onClick={() => store.updateNote(active.id, { pinned: !active.pinned })}>
-          <Pin size={16} />
-        </button>
-        <button className="t-icon-btn" title="Eliminar" onClick={() => { store.trashNote(active.id); setActiveId(null); }}>
-          <Trash2 size={16} />
-        </button>
+function NotesGrid({
+  list, mode, onOpts,
+}: {
+  list: T.NoteT[]; mode: string;
+  onOpts: (id: string, anchor: HTMLElement) => void;
+}) {
+  const { ui } = useApp();
+  if (!list.length) {
+    return (
+      <div className="notes-empty">
+        {ui.notesTab === "trash" ? "🗑" : ui.notesTab === "archived" ? "📦" : "📝"}
+        <p>
+          {ui.notesTab === "trash"
+            ? "La papelera está vacía."
+            : ui.notesTab === "archived"
+              ? "No hay notas archivadas."
+              : "No tienes notas. Pulsa «+ Nueva nota» para crear la primera."}
+        </p>
       </div>
-      <div className="mb-3 flex gap-1.5">
-        {Object.entries(NOTE_COLORS).map(([k, v]) => (
-          <button key={k} onClick={() => { setColor(k); scheduleSave({ color: k }); }}
-            className="h-7 w-7 rounded-full border" style={{ background: v, borderColor: color === k ? "var(--accent)" : "var(--border)", borderWidth: color === k ? 2 : 1 }} />
+    );
+  }
+  if (mode === "list") {
+    return (
+      <div className="view-list zoomable">
+        {list.map((n) => (
+          <NoteRow key={n.id} n={n} />
         ))}
       </div>
-      <textarea className="t-input flex-1 resize-none" style={{ lineHeight: 1.6 }} value={content}
-        onChange={(e) => { setContent(e.target.value); scheduleSave({ content: e.target.value }); }} placeholder="Escribe tu nota..." />
-      <p className="mt-2 text-right text-[11px]" style={{ color: "var(--muted)" }}>Autoguardado ✓</p>
+    );
+  }
+  const wrapCls = mode === "board" ? "view-board zoomable" : "notes-grid";
+  return (
+    <>
+      <div className="notes-hint">
+        Arrastra una tarjeta para reordenarla · ⛶ abre la vista completa · ⋯ abre el panel de opciones
+      </div>
+      <div className={wrapCls}>
+        {list.map((n) => (
+          <NoteCard key={n.id} n={n} onOpts={onOpts} />
+        ))}
+        {mode === "grid" && <NotesEndzone />}
+      </div>
+    </>
+  );
+}
+
+/* Tarjeta de nota (noteCardHTML + armNoteCards literales) */
+function NoteCard({ n, onOpts }: { n: T.NoteT; onOpts: (id: string, anchor: HTMLElement) => void }) {
+  const tc = useTC();
+  const { openModal } = useApp();
+  const dragId = useRef<string | null>(null);
+  const preview = T.stripTags(n.html || "").replace(/\s+/g, " ").trim().slice(0, 140);
+  const atts = (n.attachments || []).length;
+
+  return (
+    <div
+      className="note-card rich"
+      draggable={true}
+      data-id={n.id}
+      style={{ background: n.color || "#fef3c7" }}
+      onClick={() => openModal("note", { id: n.id })}
+      onDragStart={(e) => {
+        dragId.current = n.id;
+        e.dataTransfer.setData("text/plain", "note:" + n.id);
+        e.dataTransfer.effectAllowed = "move";
+        e.currentTarget.classList.add("dragging");
+      }}
+      onDragEnd={(e) => {
+        e.currentTarget.classList.remove("dragging");
+        dragId.current = null;
+      }}
+      onDragOver={(e) => {
+        if (!dragId.current || dragId.current === n.id) return;
+        e.preventDefault();
+        e.currentTarget.classList.add("drop-before");
+      }}
+      onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
+      onDrop={async (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove("drop-before");
+        const d = dragId.current;
+        dragId.current = null;
+        if (!d || d === n.id) return;
+        await tc.reorderNotes(d, n.id);
+      }}
+    >
+      {n.pinned && (
+        <span className="n-pin" title="Nota fijada">📌</span>
+      )}
+      {n.readLater && (
+        <span className="n-rl" title="Marcada para leer después">🔖</span>
+      )}
+      <button
+        className="n-full"
+        data-act="full"
+        title="Pantalla completa"
+        onClick={(e) => {
+          e.stopPropagation();
+          openModal("noteFull", { id: n.id });
+        }}
+      >
+        ⛶
+      </button>
+      <button
+        className="n-opts"
+        data-act="opts"
+        title="Opciones de la nota"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpts(n.id, e.currentTarget);
+        }}
+      >
+        ⋯
+      </button>
+      <div className="n-title">{n.title || "Sin título"}</div>
+      {preview && <div className="n-preview">{preview}</div>}
+      {atts > 0 && (
+        <div className="n-atts">📎 {atts} adjunto(s)</div>
+      )}
+      <span className="n-date">{T.fmtDateTime(n.updatedAt)}</span>
     </div>
-  ) : (
-    <div className="flex h-full items-center justify-center p-8 text-center">
-      <div>
-        <p className="mb-2 text-4xl">📝</p>
-        <p className="font-semibold">Elige una nota</p>
-        <p className="text-sm" style={{ color: "var(--muted)" }}>o crea una nueva con ＋</p>
+  );
+}
+
+/* Fila de nota en modo Lista (noteRowHTML + armNoteRows literales) */
+function NoteRow({ n }: { n: T.NoteT }) {
+  const { openModal } = useApp();
+  const preview = T.stripTags(n.html || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const atts = (n.attachments || []).length;
+  return (
+    <div className="vrow note-row" data-id={n.id} onClick={() => openModal("note", { id: n.id })}>
+      <span className="vrow-ic">📝</span>
+      <div className="vrow-body">
+        <div className="vrow-title">{n.title || "Sin título"}</div>
+        {preview && <div className="vrow-sub">{preview}</div>}
+      </div>
+      {atts > 0 && <span className="vrow-meta">📎 {atts}</span>}
+      <span className="vrow-meta">{T.fmtDateTime(n.updatedAt)}</span>
+      <div className="vrow-actions">
+        <button
+          className="icon-btn"
+          data-act="full"
+          title="Pantalla completa"
+          onClick={(e) => {
+            e.stopPropagation();
+            openModal("noteFull", { id: n.id });
+          }}
+        >
+          ⛶
+        </button>
       </div>
     </div>
+  );
+}
+
+/* Zona al final de la cuadrícula: soltar aquí mueve la nota a la última posición.
+   El arrastre se origina en las tarjetas (text/plain "note:<id>"); aquí se lee
+   del dataTransfer porque el ref de origen no es visible desde la zona. */
+function NotesEndzone() {
+  const tc = useTC();
+  return (
+    <div
+      className="notes-endzone"
+      title="Arrastra aquí para mover la nota al final"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("text/plain")) return;
+        e.preventDefault();
+        e.currentTarget.classList.add("drop-before");
+      }}
+      onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
+      onDrop={async (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.remove("drop-before");
+        const m = /^note:(.+)$/.exec(e.dataTransfer.getData("text/plain") || "");
+        if (!m) return;
+        await tc.moveNoteToEnd(m[1]);
+      }}
+    />
+  );
+}
+
+/* Panel de opciones de la nota ⋯ (notePopover literal) */
+export function NotePopover({
+  noteId, rect, notes, onClose,
+}: {
+  noteId: string; rect: DOMRect; notes: T.NoteT[]; onClose: () => void;
+}) {
+  const tc = useTC();
+  const { openModal } = useApp();
+  const popRef = useRef<HTMLDivElement>(null);
+  const n = notes.find((x) => x.id === noteId);
+
+  useLayoutEffect(() => {
+    const el = popRef.current;
+    if (!el) return;
+    el.style.top = Math.min(window.innerHeight - el.offsetHeight - 12, rect.bottom + 6) + "px";
+    el.style.left = Math.max(8, Math.min(window.innerWidth - 250, rect.right - 230)) + "px";
+  }, [rect]);
+
+  useEffect(() => {
+    const outside = (e: MouseEvent) => {
+      if (popRef.current && !popRef.current.contains(e.target as Node)) onClose();
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    const t = setTimeout(() => {
+      document.addEventListener("mousedown", outside);
+      document.addEventListener("keydown", esc);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("mousedown", outside);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [onClose]);
+
+  if (!n) return null;
+  const inTrash = !!n.deletedAt;
+
+  const pickColor = () =>
+    openModal("colorPick", {
+      current: n.color || "#fff7c4",
+      onPick: async (hex: string) => {
+        await tc.saveNote({ ...n, color: hex, updatedAt: Date.now() });
+      },
+    });
+
+  const item = (label: string, act: string, danger?: boolean) => (
+    <button key={act} className={"np-item" + (danger ? " danger" : "")} data-a={act}
+      onClick={async () => {
+        onClose();
+        if (act === "edit") openModal("note", { id: noteId });
+        else if (act === "full") openModal("noteFull", { id: noteId });
+        else if (act === "pin") await tc.toggleNotePin(noteId);
+        else if (act === "archive") {
+          await tc.saveNote({ ...n, archived: !n.archived, updatedAt: Date.now() });
+          tc.toast(n.archived ? "Nota desarchivada" : "Nota archivada");
+        }
+        else if (act === "readlater") {
+          await tc.toggleNoteReadLater(noteId);
+          tc.toast(n.readLater ? "Quitado de «Leer después»" : "Añadido a «Leer después»");
+        }
+        else if (act === "trash") {
+          if (!confirm("¿Enviar esta nota a la papelera?")) return;
+          await tc.trashNote(noteId);
+          await tc.logActivity("delete", "Enviaste una nota a la papelera", n.title || "Sin título");
+          tc.toast("Nota enviada a la papelera");
+        }
+        else if (act === "restore") {
+          await tc.restoreNote(noteId);
+          tc.toast("Nota restaurada");
+        }
+      }}>
+      {label}
+    </button>
   );
 
   return (
-    <div>
-      <h2 className="mb-4 text-xl font-bold tracking-tight">📝 Notas</h2>
-      <div className="t-card flex overflow-hidden" style={{ height: "calc(100vh - 220px)", minHeight: 420 }}>
-        <div className={`w-full lg:w-[320px] lg:shrink-0 lg:border-r ${activeId ? "hidden lg:block" : ""}`} style={{ borderColor: "var(--border)" }}>
-          {list}
-        </div>
-        <div className={`flex-1 ${activeId ? "" : "hidden lg:block"}`}>
-          {editor}
-        </div>
-      </div>
+    <div className="note-pop" id="notePop" ref={popRef}>
+      <div className="np-title">{n.title || "Nota"}</div>
+      <div className="np-label">🎨 STYLE</div>
+      <button className="np-colorbtn" id="npColor" title="Cambiar color (paleta o personalizado)" onClick={pickColor}>
+        <span className="np-cdot" style={{ background: n.color || "#fff7c4" }}></span>
+        <span>Color…</span>
+      </button>
+      <div className="np-sep"></div>
+      {inTrash
+        ? item("↩️ Restaurar", "restore")
+        : (
+          <>
+            {item("✏️ Editar", "edit")}
+            {item("⛶ Pantalla completa", "full")}
+            {item(n.pinned ? "📍 Desfijar" : "📌 Fijar", "pin")}
+            {item(n.archived ? "📤 Desarchivar" : "📦 Archivar", "archive")}
+            {item(n.readLater ? "🔖 Quitar de «Leer después»" : "🔖 Leer después", "readlater")}
+            {item("🗑 Enviar a papelera", "trash", true)}
+          </>
+        )}
     </div>
   );
 }

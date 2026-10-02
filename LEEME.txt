@@ -1,57 +1,38 @@
-BOOKDPB v1.0 — Como TabmeCode, pero app web para Vercel (iPad)
-================================================================
+BOOKDPB v2.1.0 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+============================================================================
 
 QUÉ ES
 -------
-Tu app de marcadores reconstruida con la experiencia de TabmeCode:
-sidebar con árbol de spaces/carpetas, inicio con tarjetas, breadcrumb,
-favoritos, leer después, etiquetas, notas, papelera, buscador,
-drag & drop y modo claro/oscuro. Tus datos NO cambian: usa tu mismo
-proyecto de Supabase (los 78 marcadores, colecciones, etiquetas y notas
-aparecen solos al entrar).
+La app con la experiencia exacta de TabmeCode: barra superior con
+buscador, barra lateral con spaces/carpetas/Mis Items/Cuentas/
+Asistentes IA/Recordatorios/Favoritos/Historial/Papelera/Leer después/
+Etiquetas, vistas tarjetas/lista/tablero con zoom, drag & drop,
+notas enriquecidas, modo claro/oscuro y táctil para iPad.
+Branding «BookDPB» con tu logo. Los botones «Guardar sesión» y
+«Duplicados de pestañas» se quitaron (eran de la extensión de Chrome).
+
+Tus datos NO se tocan: usa tu mismo proyecto de Supabase.
 
 PASOS
 -----
-1. En GitHub crea un repositorio NUEVO (ej. "bookdpb"). NO uses el viejo.
-2. Copia en tu PC el contenido de este ZIP a la carpeta del nuevo repo:
-   - src/
-   - package.json, next.config.ts, tsconfig.json, postcss.config.mjs
-   (si falta alguno de esos archivos de config en el zip, cópialo del proyecto anterior)
+1. Ejecuta supabase-migracion-v2.1.sql UNA vez en Supabase:
+   Supabase → SQL Editor → New query → pega el contenido → Run.
+   Es seguro y re-ejecutable: solo añade columnas/tablas, no borra nada.
+   (Si ya ejecutaste supabase-tablas-v2.sql antes, no pasa nada.)
+
+2. En tu PC, descomprime este ZIP SOBRE tu carpeta local del repo
+   «bookdpb» (sobrescribe los archivos).
+
 3. git add -A
-   git commit -m "BookDPB v1.0"
+   git commit -m "BookDPB v2.1.0"
    git push
-4. En Vercel: Add New → Project → importa el repo nuevo.
-5. En Settings → Environment Variables del proyecto NUEVO añade (cópialas
-   del proyecto viejo antes de borrarlo, o desde el panel de Supabase):
-   - NEXT_PUBLIC_SUPABASE_URL
-   - NEXT_PUBLIC_SUPABASE_ANON_KEY
-6. Deploy. Abre la URL en el iPad e inicia sesión con tu correo y
-   contraseña de Supabase (los mismos de la app anterior).
+   Vercel lo despliega solo.
 
-LO QUE HACE (igual que Tabme)
-------------------------------
-- Sidebar: Inicio, Favoritos, Leer después, Sin carpeta, Etiquetas, Notas,
-  Papelera + árbol de spaces y carpetas (se expande/colapsa).
-- Entrar a un space/carpeta: breadcrumb, tarjetas de subcarpetas,
-  marcadores debajo, crear subcarpeta, guardar marcador ahí mismo.
-- Guardar marcador: URL, título, descripción, Space → Carpeta (cualquier
-  nivel), etiquetas, favorito. Si eliges space sin carpeta, crea
-  "Sin clasificar" automáticamente.
-- Arrastrar: marcadores a carpetas/spaces, reordenar spaces y carpetas
-  hermanas (los botones siempre visibles funcionan sin arrastrar).
-- Etiquetas con colores, papelera con restaurar/vaciar, buscador global,
-  notas con autoguardado, exportar/importar respaldo JSON.
-- iPad: botones táctiles grandes, sin depender de hover.
+4. Abre la URL en el iPad e inicia sesión con tu correo y contraseña
+   de Supabase.
 
-QUÉ NO BORRAR
---------------
-- NO borres tu proyecto de Supabase: ahí están tus datos.
-- Cuando la nueva app funcione en el iPad, ya puedes borrar el repo viejo,
-  el proyecto viejo de Vercel y la carpeta local vieja.
-
-DIFERENCIAS MENORES CON TABMECODE (extensión de Chrome)
--------------------------------------------------------
-- "Guardar pestaña actual" no existe en iPad: se pega la URL a mano.
-- Las notas son simples (título + texto + color + fijar); sin adjuntos.
-- El orden de marcadores dentro de una carpeta es por fecha (los más
-  recientes primero); spaces y carpetas sí se reordenan arrastrando.
+NOTA
+----
+«Restaurar copia completa» (Configuración → Importar datos) pide
+confirmación y avisa que aún no está disponible en la versión web.
+La copia de seguridad sí se descarga completa (JSON).
