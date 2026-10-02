@@ -70,9 +70,9 @@ function CrumbHome() {
 
 /* ---------- Tarjeta / fila de marcador ---------- */
 
-function BookmarkCard({ b, showFolder, fname, canReorder, dragRef }:
-  { b: T.Bookmark; showFolder: boolean; fname: Record<string, string>; canReorder: boolean;
-    dragRef: React.MutableRefObject<DragState> }) {
+function BookmarkCard({ b, showFolder, fname, canReorder, dragRef, selMode, selected, onToggleSelect }:
+  { b: T.Bookmark; showFolder: boolean; fname: Record<string, string>; canReorder: boolean | "favorites";
+    dragRef: React.MutableRefObject<DragState>; selMode?: boolean; selected?: boolean; onToggleSelect?: () => void }) {
   const tc = useTC();
   const { openModal, tagColorOf } = useApp();
   const { clearDropMarks } = useDnD();
@@ -84,12 +84,13 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef }:
   };
   const onClick = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).closest("[data-act]")) return;
+    if (selMode) { onToggleSelect && onToggleSelect(); return; }
     tc.markBookmarkOpened(b.id);
     tc.openUrl(b.url);
   };
   return (
-    <div className="card" draggable="true" data-id={b.id}
-      title={canReorder && b.folderId ? "Arrastra para reordenar" : undefined}
+    <div className={"card" + (selected ? " selected" : "")} draggable={!selMode} data-id={b.id}
+      title={canReorder ? "Arrastra para reordenar" : undefined}
       onClick={onClick}
       onDragStart={(e) => {
         dragRef.current = { type: T.DT_BOOKMARK, id: b.id };
@@ -103,7 +104,9 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef }:
         if (!T.hasDT(e, T.DT_BOOKMARK)) return;
         const ds = dragRef.current;
         const dragB = ds && tc.db.bookmarks.find((x) => x.id === ds.id);
-        if (!dragB || dragB.folderId !== b.folderId || dragB.id === b.id) return;
+        if (!dragB || dragB.id === b.id) return;
+        if (canReorder === "favorites") { if (!dragB.favorite) return; }
+        else if (dragB.folderId !== b.folderId) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         e.currentTarget.classList.add("drop-before");
@@ -113,7 +116,9 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef }:
         if (!T.hasDT(e, T.DT_BOOKMARK)) return;
         e.preventDefault(); e.stopPropagation();
         e.currentTarget.classList.remove("drop-before");
-        tc.reorderBookmarks(b.folderId, e.dataTransfer.getData(T.DT_BOOKMARK), b.id);
+        const did = e.dataTransfer.getData(T.DT_BOOKMARK);
+        if (canReorder === "favorites") tc.reorderFavorites(did, b.id);
+        else tc.reorderBookmarks(b.folderId, did, b.id);
       } : undefined}>
       <div className="hover-actions">
         <button className={"icon-btn" + (b.favorite ? " on" : "")} data-act="fav" title="Favorito"
@@ -125,6 +130,12 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef }:
         <button className="icon-btn" data-act="del" title="Enviar a papelera"
           onClick={(e) => { e.stopPropagation(); del(); }}>×</button>
       </div>
+      {selMode ? (
+        <button className={"sel-check" + (selected ? " on" : "")} data-act="sel" title="Seleccionar"
+          onClick={(e) => { e.stopPropagation(); onToggleSelect && onToggleSelect(); }}>
+          {selected ? "☑" : "☐"}
+        </button>
+      ) : null}
       {T.favEl(b)}
       <div className="title">{b.title}</div>
       <div className="domain">{T.domainOf(b.url)}</div>
@@ -142,7 +153,8 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef }:
   );
 }
 
-function BookmarkRow({ b, fname }: { b: T.Bookmark; fname: Record<string, string> }) {
+function BookmarkRow({ b, fname, selMode, selected, onToggleSelect }:
+  { b: T.Bookmark; fname: Record<string, string>; selMode?: boolean; selected?: boolean; onToggleSelect?: () => void }) {
   const tc = useTC();
   const { openModal } = useApp();
   const onAct = (e: React.MouseEvent, act: string) => {
@@ -158,12 +170,19 @@ function BookmarkRow({ b, fname }: { b: T.Bookmark; fname: Record<string, string
     }
   };
   return (
-    <div className="vrow bm-row" data-id={b.id}
+    <div className={"vrow bm-row" + (selected ? " selected" : "")} data-id={b.id}
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("[data-act]")) return;
+        if (selMode) { onToggleSelect && onToggleSelect(); return; }
         tc.markBookmarkOpened(b.id);
         tc.openUrl(b.url);
       }}>
+      {selMode ? (
+        <button className={"sel-check" + (selected ? " on" : "")} data-act="sel" title="Seleccionar"
+          onClick={(e) => { e.stopPropagation(); onToggleSelect && onToggleSelect(); }}>
+          {selected ? "☑" : "☐"}
+        </button>
+      ) : null}
       <span className="vrow-ic">{T.favEl(b, 18)}</span>
       <div className="vrow-body">
         <div className="vrow-title">{b.title}</div>
@@ -469,6 +488,96 @@ function AllView({ dragRef }: { dragRef: React.MutableRefObject<DragState> }) {
   );
 }
 
+/* ---------- Lista de marcadores con vistas, zoom y selección múltiple ----------
+   Centraliza el render de marcadores para las vistas de carpeta, favoritos y
+   etiqueta: respeta el modo de vista (Cuadrícula/Lista/Tablero) + zoom del
+   toolbar y añade el modo «Seleccionar» con acciones en lote. */
+
+type ReorderCfg = null | { kind: "folder"; folderId: string } | { kind: "favorites" };
+
+function SelectableBookmarkList({ list, fname, showFolder, reorder, viewKey, dragRef }:
+  { list: T.Bookmark[]; fname: Record<string, string>; showFolder: boolean;
+    reorder: ReorderCfg; viewKey: string; dragRef: React.MutableRefObject<DragState> }) {
+  const tc = useTC();
+  const { ui, getViewMode, openModal } = useApp();
+  const [selMode, setSelMode] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const mode = getViewMode(viewKey);
+
+  useEffect(() => { setSel(new Set()); setSelMode(false); }, [ui.view, ui.folderId, ui.tag, viewKey]);
+
+  const toggleOne = (id: string) => setSel((s) => {
+    const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n;
+  });
+  const selectAll = () => setSel(new Set(list.map((b) => b.id)));
+  const cancelSel = () => { setSel(new Set()); setSelMode(false); };
+
+  const doDelete = async () => {
+    const ids = [...sel];
+    if (!ids.length) return;
+    if (!confirm(`¿Enviar ${ids.length} marcador(es) a la papelera?`)) return;
+    await tc.trashBookmarks(ids);
+    await tc.logActivity("delete", `Enviaste ${ids.length} marcador(es) a la papelera`, "");
+    tc.toast(`${ids.length} marcador(es) enviados a la papelera`);
+    cancelSel();
+  };
+  const doMove = () => {
+    const ids = [...sel];
+    if (!ids.length) return;
+    openModal("moveBookmarks", { ids, onDone: cancelSel });
+  };
+
+  const cardReorder: boolean | "favorites" = !reorder ? false : reorder.kind === "favorites" ? "favorites" : true;
+  const cardProps = (b: T.Bookmark) => ({
+    b, showFolder, fname, dragRef, selMode, canReorder: cardReorder,
+    selected: sel.has(b.id), onToggleSelect: () => toggleOne(b.id),
+  });
+  const rowProps = (b: T.Bookmark) => ({
+    b, fname, selMode, selected: sel.has(b.id), onToggleSelect: () => toggleOne(b.id),
+  });
+
+  const endzone = reorder ? (
+    <Endzone kind="bookmark" want={T.DT_BOOKMARK} dragRef={dragRef}
+      onDropId={(dragId) => reorder.kind === "favorites"
+        ? tc.reorderFavorites(dragId, null)
+        : tc.reorderBookmarks(reorder.folderId, dragId, null)} />
+  ) : null;
+
+  let body: React.ReactNode;
+  if (mode === "list") {
+    body = <div className="view-list zoomable">{list.map((b) => <BookmarkRow key={b.id} {...rowProps(b)} />)}</div>;
+  } else if (mode === "board") {
+    body = <div className="view-board zoomable">{list.map((b) => <BookmarkCard key={b.id} {...cardProps(b)} />)}</div>;
+  } else {
+    body = (<>
+      {list.map((b) => <BookmarkCard key={b.id} {...cardProps(b)} />)}
+      {endzone}
+    </>);
+  }
+
+  return (
+    <>
+      <div className="sel-toolbar">
+        {!selMode ? (
+          <button className="btn sel-btn" onClick={() => setSelMode(true)}>☑ Seleccionar</button>
+        ) : (
+          <span className="sel-count">{sel.size} seleccionado(s)</span>
+        )}
+      </div>
+      <div id="cards" className="cards zoomable">{body}</div>
+      {selMode ? (
+        <div className="bulkbar">
+          <button className="btn sel-btn" onClick={selectAll}>✓ Todos</button>
+          <button className="btn sel-btn" onClick={() => setSel(new Set())}>✕ Ninguno</button>
+          <button className="btn sel-btn danger" onClick={doDelete}>🗑 Eliminar</button>
+          <button className="btn sel-btn" onClick={doMove}>📁 Mover a…</button>
+          <button className="btn sel-btn" onClick={cancelSel}>Cancelar</button>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function FolderView({ dragRef }: { dragRef: React.MutableRefObject<DragState> }) {
   const tc = useTC();
   const { ui, goHome, goSpace, goFolder, folderById, spaceById, liveBookmarks } = useApp();
@@ -511,16 +620,9 @@ function FolderView({ dragRef }: { dragRef: React.MutableRefObject<DragState> })
   return (
     <>
       <PageHead def={{ icon: "", label: "" }} titleNode={titleNode}
-        subline={list.length + " marcador(es)"} toolbarKey="folder" />
-      <div id="cards" className="cards">
-        {list.map((b) => (
-          <BookmarkCard key={b.id} b={b} showFolder={false} fname={fname} canReorder={true} dragRef={dragRef} />
-        ))}
-        {list.length ? (
-          <Endzone kind="bookmark" want={T.DT_BOOKMARK} dragRef={dragRef}
-            onDropId={(dragId) => tc.reorderBookmarks(f.id, dragId, null)} />
-        ) : null}
-      </div>
+        subline={list.length + " marcador(es) · Arrastra para reordenar"} toolbarKey="folder" />
+      <SelectableBookmarkList list={list} fname={fname} showFolder={false} viewKey="folder"
+        reorder={{ kind: "folder", folderId: f.id }} dragRef={dragRef} />
       {list.length ? null : (
         <Empty icon="🔖" lines={[
           "Esta carpeta está vacía.",
@@ -548,11 +650,8 @@ function TagView({ dragRef }: { dragRef: React.MutableRefObject<DragState> }) {
     <>
       <PageHead def={{ icon: "", label: "" }} titleNode={titleNode}
         subline={list.length + " marcador(es)"} toolbarKey="tag" />
-      <div id="cards" className="cards">
-        {list.map((b) => (
-          <BookmarkCard key={b.id} b={b} showFolder={true} fname={fname} canReorder={false} dragRef={dragRef} />
-        ))}
-      </div>
+      <SelectableBookmarkList list={list} fname={fname} showFolder={true} viewKey="tag"
+        reorder={null} dragRef={dragRef} />
       {list.length ? null : (
         <Empty icon="🔖" lines={["No hay marcadores con la etiqueta #" + ui.tag + "."]} />
       )}
@@ -915,32 +1014,17 @@ function RemindersView() {
 
 function FavoritesView({ dragRef }: { dragRef: React.MutableRefObject<DragState> }) {
   const tc = useTC();
-  const { getViewMode, liveBookmarks } = useApp();
+  const { liveBookmarks } = useApp();
   const def = T.ITEM_DEFS["favorites"];
-  const list = liveBookmarks().filter((b) => b.favorite).sort(T.byOrder);
-  const mode = getViewMode("favorites");
+  const list = liveBookmarks().filter((b) => b.favorite)
+    .sort((a, b) => (a.favOrder - b.favOrder) || T.byOrder(a, b));
   const fname: Record<string, string> = {};
   tc.db.folders.forEach((x) => { fname[x.id] = x.name; });
-  let body: React.ReactNode = null;
-  if (list.length) {
-    if (mode === "list") {
-      body = <div className="view-list zoomable">{list.map((b) => <BookmarkRow key={b.id} b={b} fname={fname} />)}</div>;
-    } else if (mode === "board") {
-      body = (
-        <div className="view-board zoomable">
-          {list.map((b) => <BookmarkCard key={b.id} b={b} showFolder={true} fname={fname} canReorder={false} dragRef={dragRef} />)}
-        </div>
-      );
-    } else {
-      body = list.map((b) => (
-        <BookmarkCard key={b.id} b={b} showFolder={true} fname={fname} canReorder={false} dragRef={dragRef} />
-      ));
-    }
-  }
   return (
     <>
-      <PageHead def={def} subline={list.length + " favorito(s) · Pulsa ☆ en un marcador para añadirlo"} toolbarKey="favorites" />
-      <div id="cards" className="cards">{body}</div>
+      <PageHead def={def} subline={list.length + " favorito(s) · Pulsa ☆ en un marcador para añadirlo · Arrastra para reordenar"} toolbarKey="favorites" />
+      <SelectableBookmarkList list={list} fname={fname} showFolder={true} viewKey="favorites"
+        reorder={{ kind: "favorites" }} dragRef={dragRef} />
       {!list.length ? <Empty icon={def.icon} lines={["Sin favoritos todavía.", "Pulsa ☆ en cualquier marcador para destacarlo."]} /> : null}
     </>
   );

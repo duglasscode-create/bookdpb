@@ -55,6 +55,9 @@ type Ctx = {
   restoreBookmark: (id: string) => Promise<void>;
   purgeBookmark: (id: string) => Promise<void>;
   reorderBookmarks: (folderId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
+  reorderFavorites: (dragId: string, beforeId: string | null) => Promise<void>;
+  trashBookmarks: (ids: string[]) => Promise<void>;
+  moveBookmarks: (ids: string[], folderId: string) => Promise<void>;
   /* tags */
   createTag: (name: string, color?: string) => Promise<void>;
   renameTag: (oldName: string, newName: string) => Promise<void>;
@@ -207,6 +210,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         createdAt: ts(b.created_at) || Date.now(),
         lastOpened: ts(b.last_opened),
         order: b.order_num ?? i,
+        favOrder: b.fav_order ?? 0,
         deletedAt: b.is_deleted ? (ts(b.deleted_at) || Date.now()) : null,
       }));
       const notes: T.NoteT[] = ((nts.data || []) as any[]).map((n: any, i: number) => ({
@@ -543,7 +547,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       id: T.uid("b"), folderId: input.folderId || null, title: input.title.trim() || url,
       url, favicon: "", tags: input.tags || [], note: input.note || "",
       favorite: !!input.favorite, readLater: false,
-      createdAt: Date.now(), lastOpened: null, order: 0, deletedAt: null,
+      createdAt: Date.now(), lastOpened: null, order: 0, favOrder: 0, deletedAt: null,
     };
     setDb((d) => { b.order = T.nextOrder(d.bookmarks); return { ...d, bookmarks: [...d.bookmarks, b] }; });
     const { data } = await supabase.from("bookmarks").insert(bmRow(b)).select("id").single();
@@ -619,6 +623,49 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     await Promise.all(list.map((b) =>
       supabase.from("bookmarks").update({ order_num: b.order }).eq("id", b.id)));
   }, [supabase]);
+
+  /* Reordenar Favoritos: usa fav_order propio para no tocar el orden de las carpetas */
+  const reorderFavorites = useCallback(async (dragId: string, beforeId: string | null) => {
+    let list: T.Bookmark[] = [];
+    setDb((d) => {
+      list = d.bookmarks.filter((b) => b.favorite && !b.deletedAt)
+        .sort((a, b) => (a.favOrder - b.favOrder) || T.byOrder(a, b));
+      const tmp = list.map((b) => ({ id: b.id, order: b.favOrder }));
+      if (!T.reorderList(tmp, dragId, beforeId)) return d;
+      const m = new Map(tmp.map((x) => [x.id, x.order]));
+      list.forEach((b) => { b.favOrder = m.get(b.id)!; });
+      return { ...d, bookmarks: [...d.bookmarks] };
+    });
+    await Promise.all(list.map((b) =>
+      supabase.from("bookmarks").update({ fav_order: b.favOrder }).eq("id", b.id)));
+  }, [supabase]);
+
+  /* Borrado múltiple: papelera (recuperable) en una sola operación */
+  const trashBookmarks = useCallback(async (ids: string[]) => {
+    if (!ids.length) return;
+    const now = Date.now();
+    const set = new Set(ids);
+    setDb((d) => ({
+      ...d,
+      bookmarks: d.bookmarks.map((b) => (set.has(b.id) ? { ...b, deletedAt: now } : b)),
+    }));
+    await supabase.from("bookmarks")
+      .update({ is_deleted: true, deleted_at: new Date(now).toISOString() })
+      .in("id", ids);
+  }, [supabase]);
+
+  /* Mover varios marcadores a una carpeta */
+  const moveBookmarks = useCallback(async (ids: string[], folderId: string) => {
+    if (!ids.length || !folderId) return;
+    const set = new Set(ids);
+    setDb((d) => ({
+      ...d,
+      bookmarks: d.bookmarks.map((b) => (set.has(b.id) ? { ...b, folderId } : b)),
+    }));
+    await supabase.from("bookmark_collections").delete().in("bookmark_id", ids).eq("user_id", userId);
+    await supabase.from("bookmark_collections").insert(
+      ids.map((bid) => ({ bookmark_id: bid, collection_id: folderId, user_id: userId })));
+  }, [supabase, userId]);
 
   /* ----- tags ----- */
   const createTag = useCallback(async (name: string, color?: string) => {
@@ -1100,7 +1147,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       id: ids[i] || T.uid("b"), folderId: f!.id, title: it.title || it.url, url: it.url,
       favicon: T.faviconFor(it.url), tags: it.tags || [], note: it.note || "",
       favorite: false, readLater: false, createdAt: now + i, lastOpened: null,
-      order: base + i, deletedAt: null,
+      order: base + i, favOrder: 0, deletedAt: null,
     }));
     setDb((d) => ({ ...d, bookmarks: [...d.bookmarks, ...bms] }));
     for (let i = 0; i < bms.length; i++) {
@@ -1176,6 +1223,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     saveFolder, createFolder, trashFolder, restoreFolder, purgeFolder, reorderFolders,
     moveBookmarkTo,
     saveBookmark, createBookmark, trashBookmark, restoreBookmark, purgeBookmark, reorderBookmarks,
+    reorderFavorites, trashBookmarks, moveBookmarks,
     toggleFavorite, toggleReadLater,
     markBookmarkOpened, moveNoteToEnd,
     removeDuplicateBookmarks, exportJSON, exportHTML, exportCSV, exportTXT, parseImportFile, ingestImportItems,

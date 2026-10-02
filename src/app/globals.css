@@ -1123,3 +1123,22 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .side-block:active { cursor: grabbing; }
 #sideSections [data-sec].dragging { opacity: .5; }
 #sideSections [data-sec].drop-before { box-shadow: inset 0 3px 0 var(--accent); border-radius: 8px; }
+
+/* ---------- v2.2: selección múltiple de marcadores ---------- */
+.sel-toolbar { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; flex-wrap: wrap; }
+.sel-btn { font-size: 13px; padding: 7px 12px; }
+.sel-count { font-size: 13px; color: var(--muted); }
+.card.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
+.vrow.selected { background: var(--accent-soft); }
+.sel-check {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  font-size: 18px; line-height: 1; padding: 2px 4px; cursor: pointer;
+}
+.vrow .sel-check { position: static; margin-right: 2px; }
+.bulkbar {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 80;
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
+  padding: 10px 14px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28); max-width: 94vw;
+}

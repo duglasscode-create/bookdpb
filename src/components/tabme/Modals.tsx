@@ -361,9 +361,12 @@ export function FolderSelect({ value, onChange }: { value: string; onChange: (id
       .filter((f) => f.spaceId === spaceId && (f.parentId || null) === parentId)
       .sort(T.byOrder)
       .forEach((f) => {
+        // Los iconos de imagen (data URLs) no se pueden mostrar en un <select>
+        // nativo: se sustituyen por un emoji para no volcar el base64 como texto.
+        const iconLabel = !f.icon ? "" : /^data:/.test(f.icon) ? "🖼️ " : f.icon + " ";
         const pad = depth ? "  ".repeat(depth) + "↳ " : "";
         out.push(
-          <option key={f.id} value={f.id}>{pad}{f.icon ? f.icon + " " : ""}{f.name}</option>
+          <option key={f.id} value={f.id}>{pad}{iconLabel}{f.name}</option>
         );
         out.push(...tree(spaceId, f.id, depth + 1));
       });
@@ -376,6 +379,36 @@ export function FolderSelect({ value, onChange }: { value: string; onChange: (id
         return opts.length ? <optgroup key={sp.id} label={sp.name}>{opts}</optgroup> : null;
       })}
     </select>
+  );
+}
+
+/* ---------- modal mover varios marcadores a una carpeta ---------- */
+
+function MoveBookmarksModal({ ids, onDone }: { ids: string[]; onDone?: () => void }) {
+  const tc = useTC();
+  const { closeModal, liveFolders } = useApp();
+  const folders = liveFolders();
+  const [folderId, setFolderId] = useState(folders[0] ? folders[0].id : "");
+  const move = async () => {
+    if (!folderId) { tc.toast("Elige una carpeta"); return; }
+    await tc.moveBookmarks(ids, folderId);
+    const f = folders.find((x) => x.id === folderId);
+    await tc.logActivity("edit", `Moviste ${ids.length} marcador(es)`, "«" + (f ? f.name : "") + "»");
+    tc.toast(`${ids.length} marcador(es) movidos a «${f ? f.name : ""}»`);
+    if (onDone) onDone();
+    closeModal();
+  };
+  return (
+    <ModalShell>
+      <h3>📁 Mover {ids.length} marcador(es)</h3>
+      <div className="field"><label>Carpeta de destino</label>
+        <FolderSelect value={folderId} onChange={setFolderId} />
+      </div>
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" onClick={move}>Mover</button>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -1247,6 +1280,7 @@ export function Modals() {
     case "space": return <SpaceModal id={p.id} edit={p.edit} />;
     case "folder": return <FolderModal id={p.id} edit={p.edit} parentId={p.parentId} spaceId={p.spaceId} />;
     case "bookmark": return <BookmarkModal id={p.id} url={p.url} folderId={p.folderId} />;
+    case "moveBookmarks": return <MoveBookmarksModal ids={p.ids || []} onDone={p.onDone} />;
     case "io": return <IOModal />;
     case "tags": return <TagsModal />;
     case "account": return <AccountModal id={p.id} kind={p.kind} coll={p.coll} />;

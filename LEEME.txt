@@ -1,4 +1,4 @@
-BOOKDPB v2.1.1 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+BOOKDPB v2.2.0 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
 ============================================================================
 
 QUÉ ES
@@ -19,12 +19,14 @@ PASOS
    Supabase → SQL Editor → New query → pega el contenido → Run.
    Es seguro y re-ejecutable: solo añade columnas/tablas, no borra nada.
    (Si ya ejecutaste supabase-tablas-v2.sql antes, no pasa nada.)
+   1b. Ejecuta también supabase-migracion-v2.2.sql UNA vez (añade la
+   columna fav_order para el orden de Favoritos; también re-ejecutable).
 
 2. En tu PC, descomprime este ZIP SOBRE tu carpeta local del repo
    «bookdpb» (sobrescribe los archivos).
 
 3. git add -A
-   git commit -m "BookDPB v2.1.1"
+   git commit -m "BookDPB v2.2.0"
    git push
    Vercel lo despliega solo.
 
@@ -37,8 +39,27 @@ NOTA
 confirmación y avisa que aún no está disponible en la versión web.
 La copia de seguridad sí se descarga completa (JSON).
 
-NOVEDAD v2.1.1
+NOVEDAD v2.2.0
 --------------
 En el iPad: Safari → Compartir → «Añadir a pantalla de inicio».
 La app se abre a pantalla completa sin la barra de Safari, como una app
 de verdad (web app instalable: manifest + icono táctil incluidos).
+
+NOVEDAD v2.2.0
+--------------
+Arreglado: al crear/editar un marcador, el desplegable de carpetas mostraba
+el texto crudo base64 de las carpetas con icono de imagen. Ahora esas
+carpetas salen con 🖼️ en el desplegable.
+
+NOVEDAD v2.2.0
+--------------
+- Las vistas Lista/Tablero y el zoom (+/-) ahora funcionan en las carpetas
+  de marcadores (antes solo cambiaban en Cuentas).
+- Favoritos: se pueden reordenar arrastrando (orden propio, no afecta a las
+  carpetas). Requiere ejecutar supabase-migracion-v2.2.sql UNA vez en
+  Supabase (añade la columna fav_order; seguro y re-ejecutable).
+- Nuevo botón «☑ Seleccionar» en carpetas, favoritos y etiquetas:
+  selecciona uno, varios o todos, y en la barra inferior puedes
+  Eliminar (pide confirmación) o Mover a otra carpeta.
+- Avisos: al importar se confirma cuántos marcadores se subieron; al
+  eliminar en lote se pide confirmación antes.

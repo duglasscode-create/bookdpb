@@ -14,7 +14,7 @@ export type Folder = {
 export type Bookmark = {
   id: string; folderId: string | null; title: string; url: string; favicon: string;
   tags: string[]; note: string; favorite: boolean; readLater: boolean;
-  createdAt: number; lastOpened: number | null; order: number; deletedAt: number | null;
+  createdAt: number; lastOpened: number | null; order: number; favOrder: number; deletedAt: number | null;
 };
 export type NoteAttachment = { name: string; kind: string; dataUrl: string };
 export type NoteT = {
