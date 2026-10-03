@@ -1089,36 +1089,16 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v1.6.3</h3><ul>
-          <li>▦ <b>Cuadrículas arregladas</b>: Mis Items, Cuentas, Asistentes IA, Recordatorios, Papelera, Haciendo y Notas vuelven a verse en horizontal con varias columnas, como Favoritos.</li>
-          <li>↕️ <b>Secciones del sidebar</b>: arrastrar «Todas las carpetas», SPACES, MIS ITEMS, ETIQUETAS y SESIONES GUARDADAS ya funciona de verdad (agarre ⋮⋮ o encabezado); la línea de inserción indica si cae antes o después.</li>
-          <li>🕘 <b>Historial simplificado</b>: sin barra de vistas ni zoom; los filtros (Todos, Creados, Editados, Eliminados, Favoritos, Sesiones) ahora son fichas con el icono arriba y la etiqueta debajo.</li>
-        </ul><h4 style={{ marginTop: 14 }}>v1.6.2</h4><ul>
-          <li>🎨 <b>Diseño realineado</b>: todas las páginas de items comparten el mismo encabezado — icono, título, subtítulo, línea de meta y botón azul.</li>
-          <li>↕️ <b>Sidebar reordenable por secciones</b>: «Todas las carpetas», SPACES, MIS ITEMS, ETIQUETAS y SESIONES GUARDADAS se arrastran (agarre ⋮⋮ o encabezado).</li>
-          <li>🗂 <b>Página «Mis Items»</b>: clic en el encabezado de MIS ITEMS para ver todos los items como fichas.</li>
-          <li>⏰ <b>Recordatorios con color e icono</b>: como las notas; la tarjeta muestra su color y su icono.</li>
-        </ul><h4 style={{ marginTop: 14 }}>v1.6.1</h4><ul>
-          <li>🔐 <b>Cuentas y Asistentes IA con campos de credenciales</b>: Usuario, Email y Contraseña (con 👁) además de Nombre, URL y Nota.</li>
-          <li>▦☰▤ <b>Tres vistas en todas las páginas</b>: Cuadrícula, Lista y Tablero; en Recordatorios el Tablero separa Pendientes/Completados.</li>
-          <li>🔍 <b>Zoom de tarjetas</b>: botones − / + en cada página (80 %–140 %, se recuerda).</li>
-          <li>🗂 <b>Mis items renovado</b>: filas plegables, reordenables arrastrando.</li>
-        </ul><h4 style={{ marginTop: 14 }}>v1.6.0</h4><ul>
-          <li>🗂 <b>Mis items</b>: nueva sección plegable en la barra lateral.</li>
-          <li>🔑 <b>Cuentas</b> y 🤖 <b>Asistentes IA</b>: nombre, URL, usuario, email, contraseña y logo automático del dominio.</li>
-          <li>⏰ <b>Recordatorios</b>: título, fecha, hora, nota y enlace, con color e icono propios.</li>
-          <li>⭐ <b>Favoritos</b> y 🔖 <b>Haciendo</b>.</li>
-          <li>🕘 <b>Historial</b> y 🗑 <b>Papelera unificada</b> (restaurar, eliminar, vaciar, purga a 30 días).</li>
-        </ul><h4 style={{ marginTop: 14 }}>v1.5.0</h4><ul>
-          <li>↕️ <b>Reordenar arrastrando</b>: spaces, carpetas y marcadores.</li>
-          <li>🌈 <b>Selector de color con gradiente</b> (HSV + HEX/RGB).</li>
-          <li>🖼 <b>Iconos con imagen</b> (PNG/JPG/SVG/WebP, máx. 200 KB).</li>
-          <li>➕ <b>Añadir marcador manual</b> desde la barra superior.</li>
-        </ul><h4 style={{ marginTop: 14 }}>v1.4.0</h4><ul>
-          <li>🗂 <b>Barra lateral renovada</b>: carpetas anidadas bajo cada space.</li>
-          <li>🎨 <b>Iconos personalizados</b> y <b>etiquetas con color</b>.</li>
-          <li>📝 <b>Notas</b>: editor enriquecido, adjuntos, fijar, archivar, pantalla completa.</li>
-        </ul></div>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.1</h3><ul>
+          <li>🚪 <b>Cerrar sesión</b>: nuevo botón en el menú de Configuración para cambiar de cuenta.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.3.0</h4><ul>
+          <li>🏠 <b>Home en la barra lateral</b>: la app arranca en Home por defecto.</li>
+          <li>🗂 <b>«Todas las carpetas»</b> ya no sale en la barra lateral; solo existe dentro de Home.</li>
+          <li>👁 <b>Ver notas</b>: el botón «📝 Ver notas» se quitó del contenido; ahora hay un 👁 arriba a la derecha junto al lápiz.</li>
+          <li>↕️ <b>Drag & drop arreglado</b>: los botones de las tarjetas ya no bloquean el arrastre en Chrome.</li>
+          <li>📤 <b>Exportaciones</b>: ahora se llaman «bookdpb-*» en vez de «tabmecode-*».</li>
+          <li>🔖 <b>«Haciendo»</b>: «Leer después» ahora se llama «Haciendo» en toda la app.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.2.0</h4><ul>        </ul></div>
         <div className="modal-actions"><button className="btn primary" onClick={closeModal}>Cerrar</button></div>
       </ModalShell>
     );
