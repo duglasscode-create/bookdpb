@@ -23,7 +23,7 @@ let dragState: { type: string; id: string } | null = null;
 /* El mousedown se guarda (captura) porque en dragstart e.target es la <section> */
 let downEl: HTMLElement | null = null;
 
-const SEC_DEFAULT = ["allfolders", "spaces", "misitems", "tags", "sessions"];
+const SEC_DEFAULT = ["spaces", "misitems", "tags", "sessions"];
 const ITEM_KEYS = ["accounts", "assistants", "reminders", "favorites", "history", "trash", "readlater"];
 const HELP_KINDS = ["guide", "shortcuts", "changelog", "feedback", "spacepick", "itempick"];
 
@@ -96,6 +96,8 @@ function Shell() {
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tc.db.reminders]);
+
+
 
   /* Cerrar dropdowns con clic fuera */
   useEffect(() => {
@@ -472,7 +474,20 @@ function HelpMenu() {
 
 /* ================= Sidebar ================= */
 
-function Sidebar() {
+function HomeButton() {
+  const { ui, goHome } = useApp();
+  const active = ui.view === "home" && !ui.notes;
+  return (
+    <div className="side-block home-block">
+      <button className={"link-btn" + (active ? " active" : "")} onClick={goHome} title="Inicio">
+        <span style={{ fontSize: 15 }}>🏠</span>
+        <span style={{ marginLeft: 6 }}>Home</span>
+      </button>
+    </div>
+  );
+}
+
+export function Sidebar() {
   const tc = useTC();
   const sbRef = useRef<HTMLElement>(null);
   const timers = useRef<{ open: number | null; close: number | null }>({ open: null, close: null });
@@ -520,6 +535,7 @@ function Sidebar() {
         <button id="btnPinSidebar" className={"icon-btn pin-btn" + (pinned ? " active" : "")}
           title="Fijar barra lateral" onClick={pinSidebar}>{pinned ? "📍" : "📌"}</button>
       </div>
+      <HomeButton />
       {/* NOTA: sección «Pestañas abiertas» no portable a web (chrome.tabs) — omitida */}
       <div id="sideSections" onMouseDownCapture={(e) => { downEl = e.target as HTMLElement; }}>
         {orderedSecs().map((k) => {
@@ -560,9 +576,9 @@ function SecShell({ secKey, className, children }: { secKey: string; className: 
       }}
       onDragOver={(e) => {
         if (!T.hasDT(e, DT_SEC)) return;
-        if (!dragState || dragState.id === secKey) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        if (!dragState || dragState.id === secKey) return;
         const r = ref.current!.getBoundingClientRect();
         const after = e.clientY - r.top > r.height / 2;
         ref.current!.classList.toggle("drop-before", !after);
@@ -784,11 +800,11 @@ function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: s
             }}
             onDragOver={(e) => {
               if (T.hasDT(e, T.DT_FOLDER)) {
+                e.preventDefault(); e.dataTransfer.dropEffect = "move";
                 if (dragState) {
                   const df = folderById(dragState.id), tf = folderById(f.id);
                   if (!df || !tf || df.spaceId !== tf.spaceId || (df.parentId || null) !== (tf.parentId || null)) return;
                 }
-                e.preventDefault(); e.dataTransfer.dropEffect = "move";
                 if (!dragState || dragState.id !== f.id) (e.currentTarget as HTMLElement).classList.add("drop-before");
                 return;
               }
@@ -823,11 +839,11 @@ function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: s
       <li className="reorder-endzone" data-kind="folder" data-space={spaceId} data-parent={parentId || ""}
         onDragOver={(e) => {
           if (!T.hasDT(e, T.DT_FOLDER)) return;
+          e.preventDefault(); e.dataTransfer.dropEffect = "move";
           if (dragState) {
             const df = folderById(dragState.id);
             if (!df || df.spaceId !== spaceId || (df.parentId || null) !== (parentId || null)) return;
           }
-          e.preventDefault(); e.dataTransfer.dropEffect = "move";
           (e.currentTarget as HTMLElement).classList.add("drop-before");
         }}
         onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-before")}
@@ -911,8 +927,8 @@ function MisItemsSec() {
                       }}
                       onDragOver={(e) => {
                         if (!T.hasDT(e, DT_ITEMS)) return;
-                        if (!dragState || dragState.id === key) return;
                         e.preventDefault(); e.dataTransfer.dropEffect = "move";
+                        if (!dragState || dragState.id === key) return;
                         (e.currentTarget as HTMLElement).classList.add("drop-before");
                       }}
                       onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-before")}
@@ -1019,7 +1035,7 @@ function HelpModals() {
             <li>Añade <b>etiquetas</b> al editar un marcador y fíltralas desde la barra lateral; cada etiqueta tiene su <b>color</b> (cámbialo en ⚙️ → «Editar etiquetas»).</li>
             <li>La barra lateral se <b>colapsa sola</b> y se abre al pasar el ratón; fíjala con 📌.</li></ul>
           <h4>Mis items</h4>
-          <p>La sección <b>🗂 MIS ITEMS</b> de la barra lateral agrupa: <b>🔑 Cuentas</b> y <b>🤖 Asistentes IA</b> (nombre, URL, usuario, email, contraseña y logo automático del dominio), <b>⏰ Recordatorios</b> (te avisan con notificación aunque el panel esté cerrado, con color e icono propios), <b>⭐ Favoritos</b>, <b>🕘 Historial</b>, <b>🗑 Papelera</b> y <b>🔖 Leer después</b>. Todo se puede reordenar arrastrando.</p>
+          <p>La sección <b>🗂 MIS ITEMS</b> de la barra lateral agrupa: <b>🔑 Cuentas</b> y <b>🤖 Asistentes IA</b> (nombre, URL, usuario, email, contraseña y logo automático del dominio), <b>⏰ Recordatorios</b> (te avisan con notificación aunque el panel esté cerrado, con color e icono propios), <b>⭐ Favoritos</b>, <b>🕘 Historial</b>, <b>🗑 Papelera</b> y <b>🔖 Haciendo</b>. Todo se puede reordenar arrastrando.</p>
           <h4>Papelera</h4>
           <p>Todo lo que elimines va a la <b>🗑 Papelera</b>: puedes restaurarlo, eliminarlo para siempre o vaciarla. Los elementos se purgan solos a los <b>30 días</b>.</p>
           <h4>Notas</h4>
@@ -1062,7 +1078,7 @@ function HelpModals() {
     return (
       <ModalShell wide>
         <div className="help-modal changelog"><h3>🎁 Novedades de la v1.6.3</h3><ul>
-          <li>▦ <b>Cuadrículas arregladas</b>: Mis Items, Cuentas, Asistentes IA, Recordatorios, Papelera, Leer después y Notas vuelven a verse en horizontal con varias columnas, como Favoritos.</li>
+          <li>▦ <b>Cuadrículas arregladas</b>: Mis Items, Cuentas, Asistentes IA, Recordatorios, Papelera, Haciendo y Notas vuelven a verse en horizontal con varias columnas, como Favoritos.</li>
           <li>↕️ <b>Secciones del sidebar</b>: arrastrar «Todas las carpetas», SPACES, MIS ITEMS, ETIQUETAS y SESIONES GUARDADAS ya funciona de verdad (agarre ⋮⋮ o encabezado); la línea de inserción indica si cae antes o después.</li>
           <li>🕘 <b>Historial simplificado</b>: sin barra de vistas ni zoom; los filtros (Todos, Creados, Editados, Eliminados, Favoritos, Sesiones) ahora son fichas con el icono arriba y la etiqueta debajo.</li>
         </ul><h4 style={{ marginTop: 14 }}>v1.6.2</h4><ul>
@@ -1079,7 +1095,7 @@ function HelpModals() {
           <li>🗂 <b>Mis items</b>: nueva sección plegable en la barra lateral.</li>
           <li>🔑 <b>Cuentas</b> y 🤖 <b>Asistentes IA</b>: nombre, URL, usuario, email, contraseña y logo automático del dominio.</li>
           <li>⏰ <b>Recordatorios</b>: título, fecha, hora, nota y enlace, con color e icono propios.</li>
-          <li>⭐ <b>Favoritos</b> y 🔖 <b>Leer después</b>.</li>
+          <li>⭐ <b>Favoritos</b> y 🔖 <b>Haciendo</b>.</li>
           <li>🕘 <b>Historial</b> y 🗑 <b>Papelera unificada</b> (restaurar, eliminar, vaciar, purga a 30 días).</li>
         </ul><h4 style={{ marginTop: 14 }}>v1.5.0</h4><ul>
           <li>↕️ <b>Reordenar arrastrando</b>: spaces, carpetas y marcadores.</li>

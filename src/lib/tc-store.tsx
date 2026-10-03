@@ -103,7 +103,7 @@ type Ctx = {
   updateSettings: (patch: Partial<T.Settings>) => void;
 };
 
-const TCContext = createContext<Ctx | null>(null);
+export const TCContext = createContext<Ctx | null>(null);
 export const useTC = () => {
   const c = useContext(TCContext);
   if (!c) throw new Error("useTC fuera de TCProvider");
@@ -1030,7 +1030,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   };
   const exportJSON = useCallback(() => {
     const d = getDb();
-    download("tabmecode-backup-" + stamp() + ".json", JSON.stringify({
+    download("bookdpb-backup-" + stamp() + ".json", JSON.stringify({
       app: "TabmeCode", version: 2, exportedAt: new Date().toISOString(),
       spaces: d.spaces, folders: d.folders, bookmarks: d.bookmarks,
       notes: d.notes, tagColors: d.settings.tagColors || {},
@@ -1055,19 +1055,19 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       out += "</DL><p>\n";
     });
     out += "</DL><p>\n";
-    download("tabmecode-marcadores-" + stamp() + ".html", out, "text/html;charset=utf-8");
+    download("bookdpb-marcadores-" + stamp() + ".html", out, "text/html;charset=utf-8");
   }, [getDb]);
   const exportCSV = useCallback(() => {
     const d = getDb();
     const cell = (s: string) => /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
     let out = "url,title\n";
     d.bookmarks.filter((b) => !b.deletedAt).forEach((b) => { out += cell(b.url) + "," + cell(b.title) + "\n"; });
-    download("tabmecode-marcadores-" + stamp() + ".csv", out, "text/csv;charset=utf-8");
+    download("bookdpb-marcadores-" + stamp() + ".csv", out, "text/csv;charset=utf-8");
   }, [getDb]);
   const exportTXT = useCallback(() => {
     const d = getDb();
     const out = d.bookmarks.filter((b) => !b.deletedAt).map((b) => b.url).join("\n") + "\n";
-    download("tabmecode-marcadores-" + stamp() + ".txt", out, "text/plain;charset=utf-8");
+    download("bookdpb-marcadores-" + stamp() + ".txt", out, "text/plain;charset=utf-8");
   }, [getDb]);
 
   /* ----- importar ----- */

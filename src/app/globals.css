@@ -217,6 +217,7 @@ li:hover .row-actions { display: flex; }
 }
 .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .card.dragging { opacity: 0.45; }
+
 .card .fav { width: 30px; height: 30px; border-radius: 7px; margin-bottom: 10px; object-fit: contain; background: var(--card-2); }
 .card .fav-letter {
   width: 30px; height: 30px; border-radius: 7px; margin-bottom: 10px;
@@ -238,6 +239,11 @@ li:hover .row-actions { display: flex; }
 }
 .tag.big { font-size: 14px; padding: 4px 14px; }
 .card .note-flag { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.card-wrap { position: relative; }
+.card-wrap .hover-actions { position: absolute; top: 8px; right: 8px; display: none; gap: 4px; }
+.card-wrap:hover .hover-actions { display: flex; }
+.card-wrap .hover-actions .icon-btn { background: var(--card); border: 1px solid var(--border); }
+/* compat: por si algún hover-actions quedara dentro de .card */
 .card .hover-actions { position: absolute; top: 8px; right: 8px; display: none; gap: 4px; }
 .card:hover .hover-actions { display: flex; }
 .card .hover-actions .icon-btn { background: var(--card); border: 1px solid var(--border); }
@@ -622,6 +628,22 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .collapse-btn { display: none; }
 .note-card.rich .n-preview { font-size: 13px; line-height: 1.5; opacity: 0.85; margin-bottom: 6px; }
 .note-card.rich .n-atts { font-size: 11.5px; opacity: 0.7; margin-bottom: 4px; }
 .note-card.rich .n-pin { position: absolute; top: 10px; right: 74px; font-size: 13px; }
+.note-wrap { position: relative; }
+.note-wrap .n-full {
+  position: absolute; top: 6px; right: 42px;
+  background: var(--card); border-radius: 7px; cursor: pointer;
+  font-size: 14px; padding: 2px 7px; color: var(--text); line-height: 1.4;
+  border: 1px solid var(--border); display: none;
+}
+.note-wrap .n-opts {
+  position: absolute; top: 6px; right: 8px;
+  border: none; background: var(--card); border-radius: 7px; cursor: pointer;
+  font-size: 16px; padding: 2px 8px; color: var(--text); line-height: 1.4;
+  border: 1px solid var(--border); display: none;
+}
+.note-wrap:hover .n-opts, .note-wrap:hover .n-full { display: block; }
+.note-wrap .n-opts:hover, .note-wrap .n-full:hover { border-color: var(--accent); }
+/* compat: por si los botones quedaran dentro de .note-card */
 .note-card.rich .n-full {
   position: absolute; top: 6px; right: 42px;
   background: var(--card); border-radius: 7px; cursor: pointer;
@@ -886,6 +908,10 @@ body.minimal { display: flex; align-items: center; justify-content: center; back
   position: absolute; top: 8px; left: 8px; background: none; border: none;
   font-size: 17px; cursor: pointer; padding: 2px;
 }
+.card-wrap .rem-toggle {
+  position: absolute; top: 8px; left: 8px; background: none; border: none;
+  font-size: 17px; cursor: pointer; padding: 2px; z-index: 2;
+}
 .rem-card.done .ref-name { text-decoration: line-through; opacity: .6; }
 .rem-card.overdue { border-color: var(--danger); }
 
@@ -904,7 +930,7 @@ body.minimal { display: flex; align-items: center; justify-content: center; back
 .trash-row .btn { flex-shrink: 0; }
 .btn.sm { padding: 5px 10px; font-size: 12px; }
 
-/* Leer después */
+/* Haciendo */
 .rl-sec { font-size: 14px; margin: 18px 0 10px; }
 .rl-sec:first-child { margin-top: 0; }
 .rl-empty { color: var(--muted); font-size: 13px; margin: 0 0 14px; }

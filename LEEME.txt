@@ -1,11 +1,11 @@
-BOOKDPB v2.2.0 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+BOOKDPB v2.3.0 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
 ============================================================================
 
 QUÉ ES
 -------
 La app con la experiencia exacta de TabmeCode: barra superior con
-buscador, barra lateral con spaces/carpetas/Mis Items/Cuentas/
-Asistentes IA/Recordatorios/Favoritos/Historial/Papelera/Leer después/
+buscador, barra lateral con Home/spaces/Mis Items/Cuentas/
+Asistentes IA/Recordatorios/Favoritos/Historial/Papelera/Haciendo/
 Etiquetas, vistas tarjetas/lista/tablero con zoom, drag & drop,
 notas enriquecidas, modo claro/oscuro y táctil para iPad.
 Branding «BookDPB» con tu logo. Los botones «Guardar sesión» y
@@ -15,18 +15,17 @@ Tus datos NO se tocan: usa tu mismo proyecto de Supabase.
 
 PASOS
 -----
-1. Ejecuta supabase-migracion-v2.1.sql UNA vez en Supabase:
-   Supabase → SQL Editor → New query → pega el contenido → Run.
-   Es seguro y re-ejecutable: solo añade columnas/tablas, no borra nada.
-   (Si ya ejecutaste supabase-tablas-v2.sql antes, no pasa nada.)
-   1b. Ejecuta también supabase-migracion-v2.2.sql UNA vez (añade la
-   columna fav_order para el orden de Favoritos; también re-ejecutable).
+1. Si aún no lo hiciste, ejecuta supabase-migracion-v2.2.sql UNA vez en
+   Supabase (Supabase → SQL Editor → New query → pega el contenido → Run).
+   Añade la columna fav_order para el orden de Favoritos. Es seguro y
+   re-ejecutable: solo añade columnas, no borra nada.
+   (v2.3.0 no necesita ninguna migración nueva.)
 
 2. En tu PC, descomprime este ZIP SOBRE tu carpeta local del repo
    «bookdpb» (sobrescribe los archivos).
 
 3. git add -A
-   git commit -m "BookDPB v2.2.0"
+   git commit -m "BookDPB v2.3.0"
    git push
    Vercel lo despliega solo.
 
@@ -38,6 +37,22 @@ NOTA
 «Restaurar copia completa» (Configuración → Importar datos) pide
 confirmación y avisa que aún no está disponible en la versión web.
 La copia de seguridad sí se descarga completa (JSON).
+
+NOVEDAD v2.3.0
+--------------
+- Nuevo 🏠 Home en la barra lateral: abre la vista inicial (spaces).
+  La app ahora arranca en Home por defecto.
+- «Todas las carpetas» ya no sale en la barra lateral; solo existe
+  dentro de Home.
+- El botón «📝 Ver notas» se quitó del contenido.
+- Arreglado el drag & drop de tarjetas y notas: los botones de las
+  tarjetas (favorito, editar, borrar, etc.) ya no bloquean el arrastre
+  en Chrome. Se puede reordenar arrastrando en carpetas, favoritos,
+  cuentas, asistentes, recordatorios y notas.
+- Las copias de seguridad y exportaciones ahora se llaman
+  «bookdpb-*» en vez de «tabmecode-*» (backup JSON, HTML, CSV y TXT).
+- «Leer después» ahora se llama «Haciendo» en toda la app
+  (barra lateral, tarjetas, menús y ayuda).
 
 NOVEDAD v2.2.0
 --------------

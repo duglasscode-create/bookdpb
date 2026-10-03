@@ -137,6 +137,7 @@ function NotesGrid({
   onOpts: (id: string, anchor: HTMLElement) => void;
 }) {
   const { ui } = useApp();
+  const dragRef = useRef<string | null>(null);
   if (!list.length) {
     return (
       <div className="notes-empty">
@@ -168,7 +169,7 @@ function NotesGrid({
       </div>
       <div className={wrapCls}>
         {list.map((n) => (
-          <NoteCard key={n.id} n={n} onOpts={onOpts} />
+          <NoteCard key={n.id} n={n} onOpts={onOpts} dragRef={dragRef} />
         ))}
         {mode === "grid" && <NotesEndzone />}
       </div>
@@ -177,14 +178,14 @@ function NotesGrid({
 }
 
 /* Tarjeta de nota (noteCardHTML + armNoteCards literales) */
-function NoteCard({ n, onOpts }: { n: T.NoteT; onOpts: (id: string, anchor: HTMLElement) => void }) {
+function NoteCard({ n, onOpts, dragRef }: { n: T.NoteT; onOpts: (id: string, anchor: HTMLElement) => void; dragRef: React.MutableRefObject<string | null> }) {
   const tc = useTC();
   const { openModal } = useApp();
-  const dragId = useRef<string | null>(null);
   const preview = T.stripTags(n.html || "").replace(/\s+/g, " ").trim().slice(0, 140);
   const atts = (n.attachments || []).length;
 
   return (
+    <div className="card-wrap note-wrap">
     <div
       className="note-card rich"
       draggable={true}
@@ -192,26 +193,30 @@ function NoteCard({ n, onOpts }: { n: T.NoteT; onOpts: (id: string, anchor: HTML
       style={{ background: n.color || "#fef3c7" }}
       onClick={() => openModal("note", { id: n.id })}
       onDragStart={(e) => {
-        dragId.current = n.id;
+        dragRef.current = n.id;
+        e.dataTransfer.setData(T.DT_NOTE, n.id);
         e.dataTransfer.setData("text/plain", "note:" + n.id);
         e.dataTransfer.effectAllowed = "move";
         e.currentTarget.classList.add("dragging");
       }}
       onDragEnd={(e) => {
         e.currentTarget.classList.remove("dragging");
-        dragId.current = null;
+        dragRef.current = null;
       }}
       onDragOver={(e) => {
-        if (!dragId.current || dragId.current === n.id) return;
+        if (!T.hasDT(e, T.DT_NOTE)) return;
         e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        if (!dragRef.current || dragRef.current === n.id) return;
         e.currentTarget.classList.add("drop-before");
       }}
       onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
       onDrop={async (e) => {
+        if (!T.hasDT(e, T.DT_NOTE)) return;
         e.preventDefault();
         e.currentTarget.classList.remove("drop-before");
-        const d = dragId.current;
-        dragId.current = null;
+        const d = dragRef.current;
+        dragRef.current = null;
         if (!d || d === n.id) return;
         await tc.reorderNotes(d, n.id);
       }}
@@ -222,34 +227,35 @@ function NoteCard({ n, onOpts }: { n: T.NoteT; onOpts: (id: string, anchor: HTML
       {n.readLater && (
         <span className="n-rl" title="Marcada para leer después">🔖</span>
       )}
-      <button
-        className="n-full"
-        data-act="full"
-        title="Pantalla completa"
-        onClick={(e) => {
-          e.stopPropagation();
-          openModal("noteFull", { id: n.id });
-        }}
-      >
-        ⛶
-      </button>
-      <button
-        className="n-opts"
-        data-act="opts"
-        title="Opciones de la nota"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpts(n.id, e.currentTarget);
-        }}
-      >
-        ⋯
-      </button>
       <div className="n-title">{n.title || "Sin título"}</div>
       {preview && <div className="n-preview">{preview}</div>}
       {atts > 0 && (
         <div className="n-atts">📎 {atts} adjunto(s)</div>
       )}
       <span className="n-date">{T.fmtDateTime(n.updatedAt)}</span>
+    </div>
+    <button
+      className="n-full"
+      data-act="full"
+      title="Pantalla completa"
+      onClick={(e) => {
+        e.stopPropagation();
+        openModal("noteFull", { id: n.id });
+      }}
+    >
+      ⛶
+    </button>
+    <button
+      className="n-opts"
+      data-act="opts"
+      title="Opciones de la nota"
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpts(n.id, e.currentTarget);
+      }}
+    >
+      ⋯
+    </button>
     </div>
   );
 }
@@ -295,8 +301,9 @@ function NotesEndzone() {
       className="notes-endzone"
       title="Arrastra aquí para mover la nota al final"
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes("text/plain")) return;
+        if (!T.hasDT(e, T.DT_NOTE)) return;
         e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
         e.currentTarget.classList.add("drop-before");
       }}
       onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
@@ -371,7 +378,7 @@ export function NotePopover({
         }
         else if (act === "readlater") {
           await tc.toggleNoteReadLater(noteId);
-          tc.toast(n.readLater ? "Quitado de «Leer después»" : "Añadido a «Leer después»");
+          tc.toast(n.readLater ? "Quitado de «Haciendo»" : "Añadido a «Haciendo»");
         }
         else if (act === "trash") {
           if (!confirm("¿Enviar esta nota a la papelera?")) return;
@@ -405,7 +412,7 @@ export function NotePopover({
             {item("⛶ Pantalla completa", "full")}
             {item(n.pinned ? "📍 Desfijar" : "📌 Fijar", "pin")}
             {item(n.archived ? "📤 Desarchivar" : "📦 Archivar", "archive")}
-            {item(n.readLater ? "🔖 Quitar de «Leer después»" : "🔖 Leer después", "readlater")}
+            {item(n.readLater ? "🔖 Quitar de «Haciendo»" : "🔖 Haciendo", "readlater")}
             {item("🗑 Enviar a papelera", "trash", true)}
           </>
         )}

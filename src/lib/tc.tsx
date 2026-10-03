@@ -81,6 +81,7 @@ export const DT_BOOKMARK = 'application/x-tbc-bookmark';
 export const DT_ACCOUNT = 'application/x-tbc-account';
 export const DT_ASSISTANT = 'application/x-tbc-assistant';
 export const DT_REMINDER = 'application/x-tbc-reminder';
+export const DT_NOTE = 'application/x-tbc-note';
 
 export const ITEM_DEFS: Record<string, { label: string; icon: string; hint: string }> = {
   accounts: { label: 'Cuentas', icon: '🔑', hint: 'Usuarios y contraseñas de tus sitios' },
@@ -89,7 +90,7 @@ export const ITEM_DEFS: Record<string, { label: string; icon: string; hint: stri
   favorites: { label: 'Favoritos', icon: '⭐', hint: 'Tus marcadores destacados' },
   history: { label: 'Historial', icon: '🕘', hint: 'Actividad reciente' },
   trash: { label: 'Papelera', icon: '🗑', hint: 'Elementos eliminados (30 días)' },
-  readlater: { label: 'Leer después', icon: '🔖', hint: 'Para leer con calma' },
+  readlater: { label: 'Haciendo', icon: '🔖', hint: 'En curso' },
 };
 
 /* ---------- Utilidades literales del original ---------- */

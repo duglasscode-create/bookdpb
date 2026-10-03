@@ -89,6 +89,7 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef, selMode, sele
     tc.openUrl(b.url);
   };
   return (
+    <div className="card-wrap">
     <div className={"card" + (selected ? " selected" : "")} draggable={!selMode} data-id={b.id}
       title={canReorder ? "Arrastra para reordenar" : undefined}
       onClick={onClick}
@@ -102,13 +103,13 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef, selMode, sele
       onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); dragRef.current = null; }}
       onDragOver={canReorder ? (e) => {
         if (!T.hasDT(e, T.DT_BOOKMARK)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
         const ds = dragRef.current;
         const dragB = ds && tc.db.bookmarks.find((x) => x.id === ds.id);
         if (!dragB || dragB.id === b.id) return;
         if (canReorder === "favorites") { if (!dragB.favorite) return; }
         else if (dragB.folderId !== b.folderId) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
         e.currentTarget.classList.add("drop-before");
       } : undefined}
       onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
@@ -117,19 +118,11 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef, selMode, sele
         e.preventDefault(); e.stopPropagation();
         e.currentTarget.classList.remove("drop-before");
         const did = e.dataTransfer.getData(T.DT_BOOKMARK);
-        if (canReorder === "favorites") tc.reorderFavorites(did, b.id);
-        else tc.reorderBookmarks(b.folderId, did, b.id);
+        const dragB = tc.db.bookmarks.find((x) => x.id === did);
+        if (!dragB || dragB.id === b.id) return;
+        if (canReorder === "favorites") { if (!dragB.favorite) return; tc.reorderFavorites(did, b.id); }
+        else { if ((dragB.folderId || null) !== (b.folderId || null)) return; tc.reorderBookmarks(b.folderId, did, b.id); }
       } : undefined}>
-      <div className="hover-actions">
-        <button className={"icon-btn" + (b.favorite ? " on" : "")} data-act="fav" title="Favorito"
-          onClick={(e) => { e.stopPropagation(); tc.toggleFavorite(b.id); }}>{b.favorite ? "⭐" : "☆"}</button>
-        <button className={"icon-btn" + (b.readLater ? " on" : "")} data-act="readlater" title="Leer después"
-          onClick={(e) => { e.stopPropagation(); tc.toggleReadLater(b.id); }}>🔖</button>
-        <button className="icon-btn" data-act="edit" title="Editar"
-          onClick={(e) => { e.stopPropagation(); openModal("bookmark", { id: b.id }); }}>✎</button>
-        <button className="icon-btn" data-act="del" title="Enviar a papelera"
-          onClick={(e) => { e.stopPropagation(); del(); }}>×</button>
-      </div>
       {selMode ? (
         <button className={"sel-check" + (selected ? " on" : "")} data-act="sel" title="Seleccionar"
           onClick={(e) => { e.stopPropagation(); onToggleSelect && onToggleSelect(); }}>
@@ -149,6 +142,17 @@ function BookmarkCard({ b, showFolder, fname, canReorder, dragRef, selMode, sele
       ) : null}
       {b.note ? <div className="note-flag">📝 con nota</div> : null}
       {showFolder ? <div className="note-flag">🗂 {fname[b.folderId || ""] || ""}</div> : null}
+    </div>
+    <div className="hover-actions">
+      <button className={"icon-btn" + (b.favorite ? " on" : "")} data-act="fav" title="Favorito"
+        onClick={(e) => { e.stopPropagation(); tc.toggleFavorite(b.id); }}>{b.favorite ? "⭐" : "☆"}</button>
+      <button className={"icon-btn" + (b.readLater ? " on" : "")} data-act="readlater" title="Haciendo"
+        onClick={(e) => { e.stopPropagation(); tc.toggleReadLater(b.id); }}>🔖</button>
+      <button className="icon-btn" data-act="edit" title="Editar"
+        onClick={(e) => { e.stopPropagation(); openModal("bookmark", { id: b.id }); }}>✎</button>
+      <button className="icon-btn" data-act="del" title="Enviar a papelera"
+        onClick={(e) => { e.stopPropagation(); del(); }}>×</button>
+    </div>
     </div>
   );
 }
@@ -194,7 +198,7 @@ function BookmarkRow({ b, fname, selMode, selected, onToggleSelect }:
       <div className="vrow-actions">
         <button className={"icon-btn" + (b.favorite ? " on" : "")} data-act="fav" title="Favorito"
           onClick={(e) => onAct(e, "fav")}>{b.favorite ? "⭐" : "☆"}</button>
-        <button className={"icon-btn" + (b.readLater ? " on" : "")} data-act="readlater" title="Leer después"
+        <button className={"icon-btn" + (b.readLater ? " on" : "")} data-act="readlater" title="Haciendo"
           onClick={(e) => onAct(e, "readlater")}>🔖</button>
         <button className="icon-btn" data-act="edit" title="Editar" onClick={(e) => onAct(e, "edit")}>✎</button>
         <button className="icon-btn" data-act="del" title="Enviar a papelera" onClick={(e) => onAct(e, "del")}>×</button>
@@ -279,9 +283,9 @@ function SpaceRow({ sp, dragRef }: { sp: T.Space; dragRef: React.MutableRefObjec
       onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); dragRef.current = null; }}
       onDragOver={(e) => {
         if (!T.hasDT(e, T.DT_SPACE)) return;
-        if (dragRef.current && dragRef.current.id === sp.id) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        if (dragRef.current && dragRef.current.id === sp.id) return;
         e.currentTarget.classList.add("drop-before");
       }}
       onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
@@ -324,10 +328,10 @@ function FolderCard({ f, dragRef }: { f: T.Folder; dragRef: React.MutableRefObje
       onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); dragRef.current = null; }}
       onDragOver={(e) => {
         if (T.hasDT(e, T.DT_FOLDER)) {
-          const ds = dragRef.current;
-          if (ds && !sameLevel(ds.id)) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
+          const ds = dragRef.current;
+          if (ds && !sameLevel(ds.id)) return;
           if (!ds || ds.id !== f.id) e.currentTarget.classList.add("drop-before");
           return;
         }
@@ -387,6 +391,8 @@ function Endzone({ kind, want, dragRef, onDropId }:
     <div className="reorder-endzone" data-kind={kind}
       onDragOver={(e) => {
         if (!T.hasDT(e, want)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
         const ds = dragRef.current;
         if (want === T.DT_FOLDER && ds) {
           const df = folderById(ds.id);
@@ -396,8 +402,6 @@ function Endzone({ kind, want, dragRef, onDropId }:
           const db = tc.db.bookmarks.find((x) => x.id === ds.id);
           if (!db) return;
         }
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
         e.currentTarget.classList.add("drop-before");
       }}
       onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
@@ -738,6 +742,7 @@ function AccountCard({ a, kind, dragRef }: { a: T.Account; kind: string; dragRef
   };
   const dt = kind === "accounts" ? T.DT_ACCOUNT : T.DT_ASSISTANT;
   return (
+    <div className="card-wrap">
     <div className="card ref-card item-card" draggable="true" data-kind={kind} data-id={a.id}
       title="Arrastra para reordenar · clic para abrir"
       onClick={(e) => { if ((e.target as HTMLElement).closest("[data-act]")) return; openModal("account", { id: a.id, kind: "view", coll: kind }); }}
@@ -751,9 +756,9 @@ function AccountCard({ a, kind, dragRef }: { a: T.Account; kind: string; dragRef
       onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); dragRef.current = null; }}
       onDragOver={(e) => {
         if (!T.hasDT(e, dt)) return;
-        if (!dragRef.current || dragRef.current.id === a.id) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        if (!dragRef.current || dragRef.current.id === a.id) return;
         e.currentTarget.classList.add("drop-before");
       }}
       onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
@@ -765,16 +770,17 @@ function AccountCard({ a, kind, dragRef }: { a: T.Account; kind: string; dragRef
         if (!dragRef.current || dragRef.current.id === a.id) return;
         if (kind === "accounts") tc.reorderAccounts(did, a.id); else tc.reorderAssistants(did, a.id);
       }}>
-      <div className="hover-actions">
-        <button className="icon-btn" data-act="edit" title="Editar"
-          onClick={(e) => { e.stopPropagation(); openModal("account", { id: a.id, coll: kind }); }}>✎</button>
-        <button className="icon-btn" data-act="del" title="Enviar a papelera"
-          onClick={(e) => { e.stopPropagation(); del(); }}>×</button>
-      </div>
       <div className="ref-logo"><T.ItemIconEl a={a} size={40} /></div>
       <div className="ref-name">{a.name}</div>
       <div className="ref-domain">↗ {T.domainOf(a.url || "")}</div>
       {(a.username || a.email || a.password || a.note) ? <div className="note-flag">📝 con datos</div> : null}
+    </div>
+    <div className="hover-actions">
+      <button className="icon-btn" data-act="edit" title="Editar"
+        onClick={(e) => { e.stopPropagation(); openModal("account", { id: a.id, coll: kind }); }}>✎</button>
+      <button className="icon-btn" data-act="del" title="Enviar a papelera"
+        onClick={(e) => { e.stopPropagation(); del(); }}>×</button>
+    </div>
     </div>
   );
 }
@@ -875,6 +881,7 @@ function ReminderCard({ r, dragRef }: { r: T.Reminder; dragRef: React.MutableRef
     tc.toast("Elemento enviado a la papelera");
   };
   return (
+    <div className="card-wrap">
     <div className={"card ref-card rem-card item-card" + (r.done ? " done" : "") + (overdue ? " overdue" : "")}
       draggable="true" data-kind="reminders" data-id={r.id}
       style={{ borderTop: "5px solid " + color }} title="Arrastra para reordenar"
@@ -889,9 +896,9 @@ function ReminderCard({ r, dragRef }: { r: T.Reminder; dragRef: React.MutableRef
       onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); dragRef.current = null; }}
       onDragOver={(e) => {
         if (!T.hasDT(e, T.DT_REMINDER)) return;
-        if (!dragRef.current || dragRef.current.id === r.id) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
+        if (!dragRef.current || dragRef.current.id === r.id) return;
         e.currentTarget.classList.add("drop-before");
       }}
       onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
@@ -902,19 +909,20 @@ function ReminderCard({ r, dragRef }: { r: T.Reminder; dragRef: React.MutableRef
         if (!dragRef.current || dragRef.current.id === r.id) return;
         tc.reorderReminders(dragRef.current.id, r.id);
       }}>
-      <div className="hover-actions">
-        <button className="icon-btn" data-act="edit" title="Editar"
-          onClick={(e) => { e.stopPropagation(); openModal("reminder", { id: r.id }); }}>✎</button>
-        <button className="icon-btn" data-act="del" title="Enviar a papelera"
-          onClick={(e) => { e.stopPropagation(); del(); }}>×</button>
-      </div>
-      <button className="rem-toggle" data-act="done" title={r.done ? "Marcar pendiente" : "Marcar completado"}
-        onClick={(e) => { e.stopPropagation(); tc.toggleReminderDone(r.id); }}>{r.done ? "✅" : "⬜"}</button>
       <div className="ref-logo"><RemIcon r={r} size={34} /></div>
       <div className="ref-name">{r.title}</div>
       <div className="ref-domain">⏰ {T.fmtDateTime(r.when)}{overdue ? <> · <b>atrasado</b></> : null}</div>
       {r.url ? <div className="ref-domain">🔗 {T.domainOf(r.url)}</div> : null}
       {r.note ? <div className="note-flag">📝 con nota</div> : null}
+    </div>
+    <div className="hover-actions">
+      <button className="icon-btn" data-act="edit" title="Editar"
+        onClick={(e) => { e.stopPropagation(); openModal("reminder", { id: r.id }); }}>✎</button>
+      <button className="icon-btn" data-act="del" title="Enviar a papelera"
+        onClick={(e) => { e.stopPropagation(); del(); }}>×</button>
+    </div>
+    <button className="rem-toggle" data-act="done" title={r.done ? "Marcar pendiente" : "Marcar completado"}
+      onClick={(e) => { e.stopPropagation(); tc.toggleReminderDone(r.id); }}>{r.done ? "✅" : "⬜"}</button>
     </div>
   );
 }
@@ -1221,13 +1229,14 @@ function TrashView() {
   );
 }
 
-/* ---------- Leer después ---------- */
+/* ---------- Haciendo ---------- */
 
 function NoteCardLite({ n, dragRef, onOpts }: { n: T.NoteT; dragRef: React.MutableRefObject<DragState>; onOpts: (id: string, anchor: HTMLElement) => void }) {
   const { openModal } = useApp();
   const preview = T.stripTags(n.html).replace(/\s+/g, " ").trim().slice(0, 140);
   const atts = (n.attachments || []).length;
   return (
+    <div className="card-wrap note-wrap">
     <div className="note-card rich" draggable="true" data-id={n.id}
       style={{ background: n.color || "#fef3c7" }}
       onClick={(e) => { if ((e.target as HTMLElement).closest("[data-act]")) return; openModal("note", { id: n.id }); }}
@@ -1240,14 +1249,15 @@ function NoteCardLite({ n, dragRef, onOpts }: { n: T.NoteT; dragRef: React.Mutab
       onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); dragRef.current = null; }}>
       {n.pinned ? <span className="n-pin" title="Nota fijada">📌</span> : null}
       {n.readLater ? <span className="n-rl" title="Marcada para leer después">🔖</span> : null}
-      <button className="n-full" data-act="full" title="Pantalla completa"
-        onClick={(e) => { e.stopPropagation(); openModal("noteFull", { id: n.id }); }}>⛶</button>
-      <button className="n-opts" data-act="opts" title="Opciones de la nota"
-        onClick={(e) => { e.stopPropagation(); onOpts(n.id, e.currentTarget); }}>⋯</button>
       <div className="n-title">{n.title || "Sin título"}</div>
       {preview ? <div className="n-preview">{preview}</div> : null}
       {atts ? <div className="n-atts">📎 {atts} adjunto(s)</div> : null}
       <span className="n-date">{T.fmtDateTime(n.updatedAt)}</span>
+    </div>
+    <button className="n-full" data-act="full" title="Pantalla completa"
+      onClick={(e) => { e.stopPropagation(); openModal("noteFull", { id: n.id }); }}>⛶</button>
+    <button className="n-opts" data-act="opts" title="Opciones de la nota"
+      onClick={(e) => { e.stopPropagation(); onOpts(n.id, e.currentTarget); }}>⋯</button>
     </div>
   );
 }
@@ -1344,10 +1354,6 @@ export function Views() {
 
   return (
     <>
-      <div id="notesBar" className="notes-toggle">
-        <button id="btnShowNotes" className="btn" onClick={() => setUi({ notes: true })}>📝 Ver notas</button>
-        <button id="btnShowFolders" className="btn hidden">🗂 Ver carpetas</button>
-      </div>
       {body}
     </>
   );
