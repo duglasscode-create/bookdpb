@@ -214,6 +214,8 @@ li:hover .row-actions { display: flex; }
   position: relative;
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .card.dragging { opacity: 0.45; }
