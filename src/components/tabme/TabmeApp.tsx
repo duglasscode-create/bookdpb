@@ -292,7 +292,7 @@ const svgProps = {
 
 function TopActions() {
   const tc = useTC();
-  const { openModal, openDd, setOpenDd } = useApp();
+  const { openModal, openDd, setOpenDd, setUi } = useApp();
   const toggle = (id: string) => setOpenDd(openDd === id ? null : id);
 
   return (
@@ -305,6 +305,10 @@ function TopActions() {
       <button id="btnNewNote" className="tbtn" title="Crear una nota" aria-label="Añadir nota"
         onClick={() => openModal("note", { id: null })}>
         <svg {...svgProps}><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" /></svg>
+      </button>
+      <button id="btnShowNotes" className="tbtn" title="Ver notas" aria-label="Ver notas"
+        onClick={() => setUi({ notes: true })}>
+        <span style={{ fontSize: 17 }}>👁</span>
       </button>
       <span className="tsep" aria-hidden="true"></span>
       <div className="dd-wrap">
