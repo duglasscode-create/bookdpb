@@ -422,6 +422,14 @@ function SettingsMenu() {
           for (const b of live) await tc.trashBookmark(b.id);
           tc.toast("Todos los marcadores eliminados");
         }} />
+      <DdSep />
+      <DdItem act="logout" icon="🚪" label="Cerrar sesión"
+        onClick={async () => {
+          close();
+          const { createClient } = await import("@/lib/supabase/client");
+          await createClient().auth.signOut();
+          window.location.href = "/login";
+        }} />
     </>
   );
 }

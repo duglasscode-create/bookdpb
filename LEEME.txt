@@ -1,4 +1,4 @@
-BOOKDPB v2.3.0 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+BOOKDPB v2.3.1 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
 ============================================================================
 
 QUÉ ES
@@ -25,7 +25,7 @@ PASOS
    «bookdpb» (sobrescribe los archivos).
 
 3. git add -A
-   git commit -m "BookDPB v2.3.0"
+   git commit -m "BookDPB v2.3.1"
    git push
    Vercel lo despliega solo.
 
@@ -37,6 +37,12 @@ NOTA
 «Restaurar copia completa» (Configuración → Importar datos) pide
 confirmación y avisa que aún no está disponible en la versión web.
 La copia de seguridad sí se descarga completa (JSON).
+
+NOVEDAD v2.3.1
+--------------
+- Nuevo botón «🚪 Cerrar sesión» en el menú de Configuración (arriba a la
+  derecha): cierra tu sesión actual para entrar con otro correo.
+  Cada correo ve solo sus propios datos.
 
 NOVEDAD v2.3.0
 --------------
