@@ -1,4 +1,4 @@
-BOOKDPB v2.3.6 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+BOOKDPB v2.3.7 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
 ============================================================================
 
 QUÉ ES
@@ -25,7 +25,7 @@ PASOS
    «bookdpb» (sobrescribe los archivos).
 
 3. git add -A
-   git commit -m "BookDPB v2.3.6"
+   git commit -m "BookDPB v2.3.7"
    git push
    Vercel lo despliega solo.
 
@@ -37,6 +37,13 @@ NOTA
 «Restaurar copia completa» (Configuración → Importar datos) pide
 confirmación y avisa que aún no está disponible en la versión web.
 La copia de seguridad sí se descarga completa (JSON).
+
+NOVEDAD v2.3.7
+--------------
+- La página de acceso ahora sí se ve centrada: se le dio su propio
+  estilo en el CSS (las clases de Tailwind que usaba nunca se
+  activaron en la app, por eso todo salía a la izquierda y sin
+  tarjeta). Logo centrado arriba y bloque de acceso centrado.
 
 NOVEDAD v2.3.6
 --------------

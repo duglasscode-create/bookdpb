@@ -1170,3 +1170,18 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
   background: var(--bg); border: 1px solid var(--border); border-radius: 14px;
   padding: 10px 14px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28); max-width: 94vw;
 }
+
+/* ---------- Página de acceso (estilos propios, sin Tailwind) ---------- */
+.login-page { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px; background: var(--bg); }
+.login-logo { width: 140px; height: 140px; border-radius: 28px; margin-bottom: 32px; }
+.login-card { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 32px; }
+.login-head { text-align: center; margin-bottom: 28px; }
+.login-title { margin: 0 0 6px; font-size: 24px; font-weight: 700; color: var(--text); }
+.login-sub { margin: 0; font-size: 14px; color: var(--muted); }
+.login-field { margin-bottom: 16px; }
+.login-label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: var(--text); }
+.login-input { width: 100%; padding: 10px 12px; font-size: 14px; color: var(--text); background: var(--card-2); border: 1px solid var(--border); border-radius: 9px; outline: none; font-family: inherit; }
+.login-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.login-error { margin: 0 0 16px; font-size: 14px; color: var(--danger); }
+.login-btn { width: 100%; padding: 11px; font-size: 15px; font-weight: 600; font-family: inherit; color: var(--bg); background: var(--accent); border: none; border-radius: 9px; cursor: pointer; }
+.login-btn:disabled { opacity: 0.6; cursor: default; }
