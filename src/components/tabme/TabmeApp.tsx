@@ -788,7 +788,8 @@ function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: s
         const collapsed = isCollapsed(f.id);
         const active = f.id === ui.folderId && !ui.notes;
         return (
-          <li key={f.id} data-fid={f.id} draggable
+          <React.Fragment key={f.id}>
+          <li data-fid={f.id} draggable
             className={"sub-row" + (active ? " active" : "")}
             style={{ "--depth": depth } as CSSProperties}
             onClick={(e) => {
@@ -844,8 +845,15 @@ function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: s
               <button className="icon-btn" data-act="rename" title="Editar">✎</button>
               <button className="icon-btn" data-act="del" title="Eliminar">×</button>
             </span>
-            {hasKids && !collapsed && <FolderRows spaceId={spaceId} parentId={f.id} depth={depth + 1} />}
           </li>
+          {hasKids && !collapsed && (
+            <li className="sub-kids">
+              <ul className="sub-tree">
+                <FolderRows spaceId={spaceId} parentId={f.id} depth={depth + 1} />
+              </ul>
+            </li>
+          )}
+          </React.Fragment>
         );
       })}
       <li className="reorder-endzone" data-kind="folder" data-space={spaceId} data-parent={parentId || ""}

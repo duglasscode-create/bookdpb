@@ -8,13 +8,14 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "BookDPB",
   description: "Tus spaces, carpetas y marcadores en la web",
-  manifest: "/manifest.json",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     title: "BookDPB",
     statusBarStyle: "black-translucent",
   },
   icons: {
+    icon: "/icon.png",
     apple: "/apple-touch-icon.png",
   },
 };

@@ -26,9 +26,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4" style={{ background: "var(--bg)" }}>
       <div className="t-card w-full max-w-md p-8">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl text-3xl" style={{ background: "var(--accent-soft)" }}>
-            🗂️
-          </div>
+          <img src="/icon-512.png" alt="BookDPB" width={88} height={88} className="mx-auto mb-4 rounded-2xl" />
           <h1 className="text-2xl font-bold">BookDPB</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>Tus spaces en el iPad</p>
         </div>

@@ -1,4 +1,4 @@
-BOOKDPB v2.3.1 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+BOOKDPB v2.3.5 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
 ============================================================================
 
 QUÉ ES
@@ -25,7 +25,7 @@ PASOS
    «bookdpb» (sobrescribe los archivos).
 
 3. git add -A
-   git commit -m "BookDPB v2.3.1"
+   git commit -m "BookDPB v2.3.5"
    git push
    Vercel lo despliega solo.
 
@@ -37,6 +37,26 @@ NOTA
 «Restaurar copia completa» (Configuración → Importar datos) pide
 confirmación y avisa que aún no está disponible en la versión web.
 La copia de seguridad sí se descarga completa (JSON).
+
+NOVEDAD v2.3.5
+--------------
+- Revertidos 2 cambios que se habían hecho sin pedir: el texto de las
+  tarjetas se vuelve a poder seleccionar con el ratón, y el manifest
+  vuelve a ser manifest.webmanifest (el error de Chrome parecía venir
+  de una extensión del navegador).
+
+NOVEDAD v2.3.4
+--------------
+- Arreglada la cascada de subcarpetas en la barra lateral: al crear una
+  subcarpeta dentro de una carpeta ahora queda debajo de su padre (una
+  debajo de la otra), como los spaces, y se puede hacer clic en ella.
+- Nuevo logo DPB en la pantalla de acceso y favicon en la barra del
+  navegador (se regeneraron todos los tamaños de icono).
+
+NOVEDAD v2.3.2
+--------------
+- Corregido el modal Novedades: mostraba el changelog de TabmeCode
+  v1.6.3 en vez del de BookDPB.
 
 NOVEDAD v2.3.1
 --------------

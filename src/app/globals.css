@@ -153,6 +153,8 @@ button { font-family: inherit; }
 .space-row.active, .sub-row.active { background: var(--accent-soft); font-weight: 600; }
 .space-node { margin-bottom: 2px; }
 .sub-tree { margin: 2px 0 8px; }
+.sub-kids { padding: 0; }
+.sub-kids > .sub-tree { margin: 2px 0 6px; }
 .sub-row { font-size: 13px; padding: 7px 8px 7px 10px; padding-left: calc(10px + var(--depth, 0) * 18px); }
 .sub-row .folder-ico { display: inline-flex; }
 .f-emoji { line-height: 1; flex: 0 0 auto; }
@@ -214,8 +216,6 @@ li:hover .row-actions { display: flex; }
   position: relative;
   cursor: pointer;
   transition: transform 0.08s ease, box-shadow 0.08s ease;
-  user-select: none;
-  -webkit-user-select: none;
 }
 .card:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
 .card.dragging { opacity: 0.45; }
