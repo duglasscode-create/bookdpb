@@ -23,10 +23,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4" style={{ background: "var(--bg)" }}>
+    <div className="flex min-h-screen flex-col items-center justify-center p-4" style={{ background: "var(--bg)" }}>
+      <img src="/icon-512.png" alt="BookDPB" width={140} height={140} className="mb-8 rounded-3xl" />
       <div className="t-card w-full max-w-md p-8">
         <div className="mb-8 text-center">
-          <img src="/icon-512.png" alt="BookDPB" width={88} height={88} className="mx-auto mb-4 rounded-2xl" />
           <h1 className="text-2xl font-bold">BookDPB</h1>
           <p className="mt-1 text-sm" style={{ color: "var(--muted)" }}>Tus spaces en el iPad</p>
         </div>
