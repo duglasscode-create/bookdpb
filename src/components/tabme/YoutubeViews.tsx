@@ -5,7 +5,7 @@
    barra Cuadrícula/Lista/Tablero + zoom) y drag & drop en todo:
    sidebar, listas, sublistas, videos, tablero y canales. */
 "use client";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as T from "@/lib/tc";
 import { useTC } from "@/lib/tc-store";
 import { useApp, useDnD } from "./tc-ui";
@@ -112,6 +112,16 @@ function YtCrumbs({ trail }: { trail: { label: React.ReactNode; go?: () => void 
       ))}
     </>
   );
+}
+
+/* La foto real del canal (avatar) en círculo, como en la extensión
+   Youtube Playlist. Si aún no hay foto: el favicon del dominio y, en
+   último término, la inicial del canal. */
+export function YtChannelAvatar({ ch, favSize }: { ch: T.YtChannel; favSize?: number }) {
+  const fav = ch.url ? T.faviconFor(ch.url) : "";
+  if (ch.avatarUrl) return <img className="yt-avatar-img" src={ch.avatarUrl} alt="" loading="lazy" />;
+  if (fav) return <img src={fav} alt="" style={{ width: favSize || 26, height: favSize || 26 }} />;
+  return <>{(ch.name || "?").charAt(0).toUpperCase()}</>;
 }
 
 /* ---------- botón de visto (marcar / desmarcar) ---------- */
@@ -628,6 +638,48 @@ export function YtSubsView() {
   const orphans = channels.filter((ch) => !ch.categoryId || !cats.find((c) => c.id === ch.categoryId));
   if (orphans.length) sections.push({ cat: null, items: orphans });
 
+  /* Relleno de fotos: los canales que aún no tienen avatar lo piden una
+     vez al servidor (que lo lee de su página pública) y queda guardado. */
+  const triedAv = useRef<Set<string>>(new Set());
+  const fillingAv = useRef(false);
+  useEffect(() => {
+    if (fillingAv.current) return;
+    const missing = channels.filter((c) => c.url && !c.avatarUrl && !triedAv.current.has(c.id));
+    if (!missing.length) return;
+    fillingAv.current = true;
+    let cancelled = false;
+    (async () => {
+      for (const ch of missing.slice(0, 40)) {
+        triedAv.current.add(ch.id);
+        if (cancelled) break;
+        try {
+          const r = await fetch("/api/yt?channel=" + encodeURIComponent(ch.url));
+          const j = await r.json();
+          if (!cancelled && r.ok && j && j.avatar) {
+            const cur = tc.db.ytChannels.find((x) => x.id === ch.id);
+            if (cur && !cur.avatarUrl) await tc.saveYtChannel({ ...cur, avatarUrl: j.avatar });
+          }
+        } catch { /* el siguiente */ }
+      }
+      fillingAv.current = false;
+    })();
+    return () => { cancelled = true; fillingAv.current = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels]);
+
+  /* Categorías plegadas (se recuerda en settings, entre dispositivos) */
+  const collapsedCats = tc.db.settings.ytCollapsedCats || [];
+  const catKey = (cat: T.YtCategory | null) => (cat ? cat.id : "none");
+  const isCollapsed = (cat: T.YtCategory | null) => collapsedCats.includes(catKey(cat));
+  const toggleCat = (cat: T.YtCategory | null) => {
+    const k = catKey(cat);
+    tc.updateSettings({
+      ytCollapsedCats: collapsedCats.includes(k)
+        ? collapsedCats.filter((x) => x !== k)
+        : [...collapsedCats, k],
+    });
+  };
+
   /* Soltar un canal sobre una sección/columna lo mueve a esa categoría */
   const overCat = (e: React.DragEvent) => {
     if (T.hasDT(e, T.DT_YTCHANNEL)) { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add("drop-target"); }
@@ -644,8 +696,11 @@ export function YtSubsView() {
     }
   };
 
-  const catHeader = (cat: T.YtCategory | null, items: T.YtChannel[]) => (
+  const catHeader = (cat: T.YtCategory | null, items: T.YtChannel[], tog?: boolean) => (
     <div className="yt-cat-h" draggable={!!cat} data-cathead={cat ? cat.id : ""}
+      onClick={(e) => {
+        if (tog && (e.target as HTMLElement).closest("[data-tog]")) toggleCat(cat);
+      }}
       onDragStart={(e) => {
         if (!cat) return;
         if (dragRef) dragRef.current = { type: DT_YTCAT, id: cat.id };
@@ -667,9 +722,13 @@ export function YtSubsView() {
         (e.currentTarget as HTMLElement).classList.remove("drop-before");
         tc.reorderYtCategories(e.dataTransfer.getData(DT_YTCAT), cat.id);
       }}>
+      {tog ? (
+        <span className="yt-cat-chev" data-tog="1" title={isCollapsed(cat) ? "Desplegar categoría" : "Plegar categoría"}>
+          {isCollapsed(cat) ? "▸" : "▾"}</span>
+      ) : null}
       <span className="yt-cat-grip" title="Arrastra para reordenar la categoría">⠿</span>
       {cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🗂️</span>}
-      <span>{cat ? cat.name : "Sin categoría"}</span>
+      <span data-tog={tog ? "1" : undefined} style={tog ? { cursor: "pointer" } : undefined}>{cat ? cat.name : "Sin categoría"}</span>
       <span className="yt-cat-count">{items.length}</span>
       {cat ? (
         <span className="yt-cat-actions">
@@ -712,8 +771,8 @@ export function YtSubsView() {
       <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
         onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
         onDrop={dropOnCat(cat)}>
-        {catHeader(cat, items)}
-        {items.length ? (
+        {catHeader(cat, items, true)}
+        {isCollapsed(cat) ? null : items.length ? (
           mode === "list" ? (
             <div className="view-list zoomable" style={{ marginTop: 2 }}>
               {items.map((ch) => (
@@ -736,7 +795,7 @@ export function YtSubsView() {
     <>
       <YtHead vkey="ytsubs"
         titleNode={<YtCrumbs trail={[{ label: <>📡 Suscripciones</> }]} />}
-        subline={channels.length + " canal(es) en " + cats.length + " categoría(s) · Arrastra un canal a otra categoría para moverlo"}
+        subline={channels.length + " canal(es) en " + cats.length + " categoría(s) · Clic en una categoría para plegarla · Arrastra un canal a otra categoría para moverlo"}
         primary={<>
           <button className="btn" onClick={() => openModal("ytcat", {})}>＋ Nueva categoría</button>
           <button className="btn primary" onClick={() => openModal("ytchannel", {})}>＋ Nuevo canal</button>
@@ -750,7 +809,6 @@ function YtChannelCard({ ch, nVideos, dragRef, mini }: { ch: T.YtChannel; nVideo
   const tc = useTC();
   const { openModal } = useApp();
   const { clearDropMarks } = useDnD();
-  const fav = ch.url ? T.faviconFor(ch.url) : "";
   const del = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("¿Enviar a la papelera el canal «" + ch.name + "»? Podrás recuperarlo desde MIS ITEMS → Papelera durante 30 días.")) return;
@@ -788,7 +846,7 @@ function YtChannelCard({ ch, nVideos, dragRef, mini }: { ch: T.YtChannel; nVideo
         }
       }}>
       <span className="yt-avatar" style={{ background: "var(--card-2)" }}>
-        {fav ? <img src={fav} alt="" style={{ width: 26, height: 26 }} /> : (ch.name || "?").charAt(0).toUpperCase()}
+        <YtChannelAvatar ch={ch} />
       </span>
       <div className="yt-chmeta">
         <div className="yt-chname">{ch.name}</div>
@@ -809,7 +867,6 @@ function YtChannelRow({ ch, nVideos, dragRef }: { ch: T.YtChannel; nVideos: numb
   const tc = useTC();
   const { openModal } = useApp();
   const { clearDropMarks } = useDnD();
-  const fav = ch.url ? T.faviconFor(ch.url) : "";
   const del = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm("¿Enviar a la papelera el canal «" + ch.name + "»? Podrás recuperarlo desde MIS ITEMS → Papelera durante 30 días.")) return;
@@ -847,7 +904,7 @@ function YtChannelRow({ ch, nVideos, dragRef }: { ch: T.YtChannel; nVideos: numb
         }
       }}>
       <span className="yt-avatar" style={{ background: "var(--card-2)", width: 30, height: 30, fontSize: 13 }}>
-        {fav ? <img src={fav} alt="" style={{ width: 18, height: 18 }} /> : (ch.name || "?").charAt(0).toUpperCase()}
+        <YtChannelAvatar ch={ch} favSize={18} />
       </span>
       <div className="vrow-body">
         <div className="vrow-title">{ch.name}</div>

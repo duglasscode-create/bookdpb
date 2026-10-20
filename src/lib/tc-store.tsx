@@ -308,6 +308,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       const ytChannels: T.YtChannel[] = ((yth.data || []) as any[]).map((c: any, i: number) => ({
         id: c.id, categoryId: c.category_id || null, name: c.name || "", url: c.url || "",
         handle: c.handle || "", icon: c.icon || "", iconType: c.icon_type || "auto",
+        avatarUrl: c.avatar_url || "",
         order: c.position ?? i, deletedAt: c.is_deleted ? (ts(c.deleted_at) || Date.now()) : null,
       }));
 
@@ -1313,6 +1314,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   const ytChanRow = (c: T.YtChannel) => ({
     user_id: userId, category_id: c.categoryId, name: c.name, url: c.url || null,
     handle: c.handle || null, icon: c.icon || null, icon_type: c.iconType || "auto",
+    avatar_url: c.avatarUrl || null,
     position: c.order ?? 0, is_deleted: !!c.deletedAt, deleted_at: iso(c.deletedAt),
   });
 
@@ -1592,7 +1594,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     const c: T.YtChannel = {
       id: T.uid("yh"), categoryId: input.categoryId || null, name: input.name || "Canal",
       url: input.url || "", handle: input.handle || "", icon: input.icon || "",
-      iconType: input.iconType || "auto", order: 0, deletedAt: null,
+      iconType: input.iconType || "auto", avatarUrl: input.avatarUrl || "", order: 0, deletedAt: null,
     };
     setDb((d) => {
       c.order = T.nextOrder(d.ytChannels.filter((x) => (x.categoryId || null) === (c.categoryId || null)));

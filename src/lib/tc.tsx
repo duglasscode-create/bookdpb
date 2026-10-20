@@ -53,7 +53,7 @@ export type YtCategory = {
 };
 export type YtChannel = {
   id: string; categoryId: string | null; name: string; url: string; handle: string;
-  icon: string; iconType: string;
+  icon: string; iconType: string; avatarUrl: string;
   order: number; deletedAt: number | null;
 };
 export type Settings = {
@@ -65,7 +65,7 @@ export type Settings = {
   viewModes: Record<string, string>; cardZoom: number;
   itemOrder: string[]; itemExpanded: Record<string, boolean>;
   sidebarLayout: string[]; tagColors: Record<string, string>;
-  ytOrder: string[];
+  ytOrder: string[]; ytCollapsedCats: string[];
 };
 export type DB = {
   spaces: Space[]; folders: Folder[]; bookmarks: Bookmark[]; notes: NoteT[];
@@ -364,5 +364,5 @@ export const DEFAULT_SETTINGS: Settings = {
   collapseFolders: false, sidebarPinned: false,
   collapsedFolders: {}, expandedSpaces: {}, expandedItems: {},
   viewModes: {}, cardZoom: 1, itemOrder: [], itemExpanded: {},
-  sidebarLayout: [], tagColors: {}, ytOrder: [],
+  sidebarLayout: [], tagColors: {}, ytOrder: [], ytCollapsedCats: [],
 };

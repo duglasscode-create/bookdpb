@@ -1459,6 +1459,8 @@ function YtChannelModal({ id }: { id?: string }) {
   const [url, setUrl] = useState(edit ? edit.url : "");
   const [name, setName] = useState(edit ? edit.name : "");
   const [handle, setHandle] = useState(edit ? edit.handle : "");
+  const [avatar, setAvatar] = useState(edit ? edit.avatarUrl : "");
+  const [avatarFor, setAvatarFor] = useState(edit ? edit.url : "");
   const [cat, setCat] = useState<string>(edit ? (edit.categoryId || "") : "");
   const [busy, setBusy] = useState(false);
   const cats = liveYtCats().sort(T.byOrder);
@@ -1472,6 +1474,7 @@ function YtChannelModal({ id }: { id?: string }) {
       if (r.ok) {
         if (j.name && !name) setName(j.name);
         if (j.handle) setHandle(j.handle);
+        if (j.avatar) { setAvatar(j.avatar); setAvatarFor(u.trim()); }
       }
     } catch { /* se rellena a mano */ }
     setBusy(false);
@@ -1480,11 +1483,15 @@ function YtChannelModal({ id }: { id?: string }) {
   const save = async () => {
     const n = name.trim();
     if (!n) { tc.toast("Escribe el nombre del canal (o pega su URL y se rellena solo)"); return; }
+    const u = url.trim();
+    /* La foto solo vale si se resolvió para ESTA url; si la url cambió
+       y no se resolvió, se deja vacía y Suscripciones la rellena sola. */
+    const av = avatarFor === u ? avatar : (edit && u === edit.url ? edit.avatarUrl : "");
     if (edit) {
-      await tc.saveYtChannel({ ...edit, name: n, url: url.trim(), handle: handle.trim(), categoryId: cat || null });
+      await tc.saveYtChannel({ ...edit, name: n, url: u, handle: handle.trim(), avatarUrl: av, categoryId: cat || null });
       tc.toast("Canal guardado");
     } else {
-      await tc.createYtChannel({ name: n, url: url.trim(), handle: handle.trim(), categoryId: cat || null });
+      await tc.createYtChannel({ name: n, url: u, handle: handle.trim(), avatarUrl: av, categoryId: cat || null });
       tc.toast("Canal añadido a tus suscripciones");
     }
     closeModal();
@@ -1500,6 +1507,15 @@ function YtChannelModal({ id }: { id?: string }) {
           onPaste={(e) => { const t = e.clipboardData.getData("text"); setTimeout(() => resolve(t), 0); }} />
       </div>
       {busy ? <p className="ip-hint">Buscando el canal…</p> : null}
+      {avatar && avatarFor === url.trim() ? (
+        <div className="yt-found">
+          <img src={avatar} alt="" style={{ width: 46, height: 46, borderRadius: "50%", objectFit: "cover" }} />
+          <div>
+            <div className="yt-found-title">{name || "Canal"}</div>
+            <div className="yt-found-sub">Así se verá en tus suscripciones</div>
+          </div>
+        </div>
+      ) : null}
       <div className="field"><label>Nombre</label>
         <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Se rellena al pegar la URL…" />
       </div>

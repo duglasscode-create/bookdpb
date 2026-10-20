@@ -1472,7 +1472,10 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.10</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.11</h3><ul>
+          <li>📸 <b>Logos de los canales</b>: en Suscripciones cada canal enseña su foto real en círculo, como en tu extensión. Los canales que ya tenías se rellenan solos al abrir Suscripciones.</li>
+          <li>▸ <b>Categorías plegables</b> en Suscripciones: clic en el nombre de una categoría (o en su flecha) para plegarla y desplegarla; lo que dejes plegado se recuerda en todos tus dispositivos.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.3.10</h4><ul>
           <li>▶️ <b>Botón de reproducir/pausar, ahora sí</b>: la causa era un choque de nombres en los estilos (su clase «main» es también la de la columna central de la app, que le metía 96px de relleno al abrir el reproductor). Botón redondo nuevo con el color de BookDPB, como el de tu extensión.</li>
           <li>📥 <b>Importar playlists, arreglado</b>: YouTube cambió el formato interno de sus páginas de playlist y por eso unas listas entraban y otras no. El importador ya lee los dos formatos.</li>
         </ul><h4 style={{ marginTop: 14 }}>v2.3.9</h4><ul>

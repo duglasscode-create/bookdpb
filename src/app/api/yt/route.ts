@@ -177,7 +177,16 @@ export async function GET(req: NextRequest) {
     const og = html.match(/<meta property="og:title" content="([^"]+)"/);
     if (og) name = og[1].replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/ - YouTube$/, "");
     if (!name && handleM) name = handleM[1];
-    return NextResponse.json({ name, handle: handleM ? "@" + handleM[1] : "", url });
+    /* La foto del canal: en su página pública es el og:image (un
+       yt3.googleusercontent.com). Respaldo: el avatar de ytInitialData. */
+    let avatar = "";
+    const ogi = html.match(/<meta property="og:image" content="([^"]+)"/);
+    if (ogi && /yt3\.googleusercontent\.com/.test(ogi[1])) avatar = ogi[1].replace(/&amp;/g, "&");
+    if (!avatar) {
+      const av = html.match(/"avatar":\{"thumbnails":\[\{"url":"([^"]+)"/);
+      if (av) avatar = av[1].replace(/\\u0026/g, "&");
+    }
+    return NextResponse.json({ name, handle: handleM ? "@" + handleM[1] : "", url, avatar });
   }
 
   return NextResponse.json({ error: "Falta el parámetro video, list o channel" }, { status: 400 });
