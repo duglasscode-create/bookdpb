@@ -61,6 +61,37 @@ function findPlaylistItems(node: any, out: any[]): void {
   Object.values(node).forEach((v) => findPlaylistItems(v, out));
 }
 
+/* Formato NUEVO de las páginas de playlist de YouTube (2025): los videos ya
+   no vienen como playlistVideoRenderer sino como lockupViewModel. YouTube
+   sirve un formato u otro según la petición, por eso unas listas entraban
+   y otras no. Se leen los dos. */
+function findLockupItems(node: any, out: any[]): void {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) { node.forEach((n) => findLockupItems(n, out)); return; }
+  if (node.lockupViewModel && node.lockupViewModel.contentId) out.push(node.lockupViewModel);
+  Object.values(node).forEach((v) => findLockupItems(v, out));
+}
+function lockupChannel(lv: any): string {
+  try {
+    const rows = lv.metadata.lockupMetadataViewModel.metadata.contentMetadataViewModel.metadataRows || [];
+    const parts = (rows[0] && rows[0].metadataParts) || [];
+    return (parts[0] && parts[0].text && parts[0].text.content) || "";
+  } catch { return ""; }
+}
+function lockupDuration(lv: any): number {
+  try {
+    const overlays = (lv.contentImage && lv.contentImage.thumbnailViewModel && lv.contentImage.thumbnailViewModel.overlays) || [];
+    for (const o of overlays) {
+      const badges = (o.thumbnailBottomOverlayViewModel && o.thumbnailBottomOverlayViewModel.badges) || [];
+      for (const b of badges) {
+        const t = b.thumbnailBadgeViewModel && b.thumbnailBadgeViewModel.text;
+        if (t && /^\d+:\d{2}(:\d{2})?$/.test(t)) return durToSec(t);
+      }
+    }
+  } catch { /* sin duración */ }
+  return 0;
+}
+
 export async function GET(req: NextRequest) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -98,20 +129,33 @@ export async function GET(req: NextRequest) {
     if (!r.ok) return NextResponse.json({ error: "No se pudo leer la playlist" }, { status: 422 });
     const html = await r.text();
     const data = extractInitialData(html);
-    if (!data) return NextResponse.json({ error: "No se pudo interpretar la playlist (¿es pública?)" }, { status: 422 });
-    const raw: any[] = [];
-    findPlaylistItems(data, raw);
-    const seen = new Set<string>();
-    const items = raw
-      .filter((v) => v.videoId && !seen.has(v.videoId) && seen.add(v.videoId))
-      .slice(0, 100)
-      .map((v) => ({
+    if (!data) return NextResponse.json({ error: "YouTube no entregó esa playlist. Comprueba que el enlace sea correcto y que la playlist sea pública." }, { status: 422 });
+    /* Se leen los DOS formatos que YouTube puede servir (viejo y nuevo),
+       deduplicados por video y en el orden de la página. */
+    const byId = new Map<string, { youtubeId: string; title: string; channelName: string; durationSec: number }>();
+    const rawOld: any[] = [];
+    findPlaylistItems(data, rawOld);
+    rawOld.forEach((v) => {
+      if (!v.videoId || byId.has(v.videoId)) return;
+      byId.set(v.videoId, {
         youtubeId: v.videoId as string,
         title: (v.title && v.title.runs && v.title.runs[0] && v.title.runs[0].text) || "Video de YouTube",
         channelName: (v.shortBylineText && v.shortBylineText.runs && v.shortBylineText.runs[0] && v.shortBylineText.runs[0].text) || "",
         durationSec: v.lengthSeconds ? parseInt(v.lengthSeconds, 10) || 0 : durToSec(v.lengthText && v.lengthText.simpleText),
-      }));
-    if (!items.length) return NextResponse.json({ error: "La playlist no devolvió videos (¿es pública?)" }, { status: 422 });
+      });
+    });
+    const rawNew: any[] = [];
+    findLockupItems(data, rawNew);
+    rawNew.forEach((lv) => {
+      const id = lv.contentId as string;
+      if (!id || !/^[\w-]{11}$/.test(id) || byId.has(id)) return;
+      if (lv.contentType && lv.contentType !== "LOCKUP_CONTENT_TYPE_VIDEO") return;
+      let title = "Video de YouTube";
+      try { title = lv.metadata.lockupMetadataViewModel.title.content || title; } catch { /* título genérico */ }
+      byId.set(id, { youtubeId: id, title, channelName: lockupChannel(lv), durationSec: lockupDuration(lv) });
+    });
+    const items = [...byId.values()].slice(0, 100);
+    if (!items.length) return NextResponse.json({ error: "La playlist se abrió pero no trajo videos (puede estar vacía)." }, { status: 422 });
     let listTitle = "";
     try {
       const m = html.match(/<meta property="og:title" content="([^"]+)"/);

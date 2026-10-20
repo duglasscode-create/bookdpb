@@ -1295,7 +1295,8 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .yt-ibtn { border: none; background: transparent; font-size: 15px; cursor: pointer; width: 34px; height: 34px; border-radius: 50%; color: var(--text); padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; overflow: hidden; line-height: 0; }
 .yt-ibtn svg { display: block; }
 .yt-ibtn:hover { background: var(--card-2); }
-.yt-ibtn.main { background: var(--text); color: var(--bg); }
+.yt-ibtn.yt-play { width: 38px; height: 38px; background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.yt-ibtn.yt-play:hover { background: var(--accent); filter: brightness(1.1); }
 .yt-ibtn.on { color: var(--accent); background: var(--accent-soft); }
 .yt-track { display: flex; align-items: center; gap: 9px; width: 100%; max-width: 560px; color: var(--muted); font-size: 11.5px; }
 .yt-progress { flex: 1; height: 5px; background: var(--card-2); border-radius: 5px; overflow: hidden; cursor: pointer; }

@@ -385,13 +385,13 @@ function YtPlayerBar() {
             <button className="yt-ibtn" title="Anterior" onClick={() => step(-1)}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2.5v14H6zM19.5 5v14L10 12z" /></svg>
             </button>
-            <button className="yt-ibtn main" title={playing ? "Pausa" : "Reproducir"}
+            <button className="yt-ibtn yt-play" title={playing ? "Pausa" : "Reproducir"}
               onClick={() => {
                 const p = playerRef.current; if (!p) return;
                 if (playing) p.pauseVideo(); else p.playVideo();
               }}>{playing
-                ? <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 5h3.8v14H6.5zM13.7 5h3.8v14h-3.8z" /></svg>
-                : <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l10-6.86a1.03 1.03 0 0 0 0-1.76l-10-6.86A1.03 1.03 0 0 0 8 5.14z" /></svg>}</button>
+                ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 5h3.8v14H6.5zM13.7 5h3.8v14h-3.8z" /></svg>
+                : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l10-6.86a1.03 1.03 0 0 0 0-1.76l-10-6.86A1.03 1.03 0 0 0 8 5.14z" /></svg>}</button>
             <button className="yt-ibtn" title="Siguiente" onClick={() => step(1)}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 5H18v14h-2.5zM4.5 5v14L14 12z" /></svg>
             </button>
@@ -1472,7 +1472,10 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.9</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.10</h3><ul>
+          <li>▶️ <b>Botón de reproducir/pausar, ahora sí</b>: la causa era un choque de nombres en los estilos (su clase «main» es también la de la columna central de la app, que le metía 96px de relleno al abrir el reproductor). Botón redondo nuevo con el color de BookDPB, como el de tu extensión.</li>
+          <li>📥 <b>Importar playlists, arreglado</b>: YouTube cambió el formato interno de sus páginas de playlist y por eso unas listas entraban y otras no. El importador ya lee los dos formatos.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.3.9</h4><ul>
           <li>▶️ <b>Botón de reproducir/pausar arreglado</b>: ya no sale deformado en la barra del reproductor; todos los botones de transporte son ahora iconos nítidos.</li>
           <li>👁 <b>Suscripciones y Completadas con vistas</b>: Cuadrícula, Lista y Tablero con zoom, igual que Listas. En el tablero de Suscripciones cada columna es una categoría: arrastra un canal de columna para moverlo.</li>
           <li>🗑 <b>Papelera para Youtube Manager</b>: borrar una lista, un video, un canal o una categoría ya no es para siempre — va a la papelera de MIS ITEMS y lo puedes recuperar durante 30 días.</li>

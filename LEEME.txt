@@ -1,4 +1,4 @@
-BOOKDPB v2.3.9 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+BOOKDPB v2.3.10 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
 ============================================================================
 
 QUÉ ES
@@ -29,7 +29,7 @@ PASOS
    «bookdpb» (sobrescribe los archivos).
 
 3. git add -A
-   git commit -m "BookDPB v2.3.9"
+   git commit -m "BookDPB v2.3.10"
    git push
    Vercel lo despliega solo.
 
@@ -41,6 +41,33 @@ NOTA
 «Restaurar copia completa» (Configuración → Importar datos) pide
 confirmación y avisa que aún no está disponible en la versión web.
 La copia de seguridad sí se descarga completa (JSON).
+
+NOVEDAD v2.3.10
+---------------
+- ▶️ BOTÓN DEL REPRODUCTOR, ARREGLADO DE RAÍZ: en la v2.3.9 el
+  botón seguía deformado, y la causa no era el icono: su clase
+  «main» chocaba con la regla CSS de la columna central de la app
+  (que se llama igual), y al abrir el reproductor le caían 96px de
+  relleno inferior que lo convertían en una elipse negra. El botón
+  ahora se llama «yt-play», ya no choca con nada, y es un botón
+  redondo relleno con el color de acento de BookDPB y el icono en
+  blanco, como el de tu extensión Youtube Playlist pero con los
+  colores de la app. Los demás botones (aleatorio, anterior,
+  siguiente) se quedan como estaban: se veían bien.
+- 📥 IMPORTAR PLAYLISTS, ARREGLADO: YouTube cambió la plantilla
+  interna de las páginas de playlist (los videos ya no vienen como
+  «playlistVideoRenderer» sino como «lockupViewModel») y sirve una
+  u otra según la petición — por eso unas listas entraban y otras
+  daban «La playlist no devolvió videos (¿es pública?)» aunque
+  fueran públicas. El importador ahora lee LAS DOS plantillas y une
+  los resultados. Probado con tu lista «Stories (A1–A2)»: antes 0
+  videos, ahora entran 15 con título, canal y duración.
+  · Nota: la página de YouTube incrusta un primer lote de videos;
+    en esa lista son 15 de 16 (el último se carga después, por
+    «continuación», y queda fuera, igual que el tope de 100).
+  · Los mensajes de error ahora dicen la verdad: si YouTube no
+    entrega la playlist lo dice (revisa enlace y que sea pública),
+    y si se abre pero no trae videos, también.
 
 NOVEDAD v2.3.9
 --------------
