@@ -23,14 +23,20 @@ let dragState: { type: string; id: string } | null = null;
 /* El mousedown se guarda (captura) porque en dragstart e.target es la <section> */
 let downEl: HTMLElement | null = null;
 
-const SEC_DEFAULT = ["spaces", "misitems", "tags", "sessions"];
-const ITEM_KEYS = ["accounts", "assistants", "reminders", "favorites", "history", "trash", "readlater"];
+const SEC_DEFAULT = ["spaces", "misitems", "youtube", "tags", "sessions"];
+const ITEM_KEYS = ["accounts", "reminders", "favorites", "history", "trash", "readlater"];
+const YT_KEYS = ["ytlists", "ytsubs", "ytdone"];
+const YT_DEFS: Record<string, { label: string; icon: string; hint: string }> = {
+  ytlists: { label: "Listas", icon: "🎬", hint: "Tus listas de videos de YouTube" },
+  ytsubs: { label: "Suscripciones", icon: "📡", hint: "Tus canales de YouTube, por categorías" },
+  ytdone: { label: "Completadas", icon: "🏁", hint: "Listas con todos los videos vistos" },
+};
 const HELP_KINDS = ["guide", "shortcuts", "changelog", "feedback", "spacepick", "itempick"];
 
 const INITIAL_UI: UiState = {
   view: "home", spaceId: null, folderId: null, tag: null, notes: false,
   notesTab: "all", notesQuery: "", histFilter: "all",
-  remindersTab: "all", trashTab: "all",
+  remindersTab: "all", trashTab: "all", ytListId: null,
 };
 
 export function TabmeApp({ userId }: { userId: string }) {
@@ -54,7 +60,7 @@ export function TabmeApp({ userId }: { userId: string }) {
 
 function Shell() {
   const tc = useTC();
-  const { ui, setUi, modal, closeModal, openDd, setOpenDd, getZoom, liveReminders } = useApp();
+  const { ui, setUi, modal, closeModal, openDd, setOpenDd, getZoom, liveReminders, ytPlayer } = useApp();
   const restored = useRef(false);
 
   /* Restaurar selección guardada (vista folder solo si la carpeta existe) */
@@ -148,11 +154,266 @@ function Shell() {
           {ui.notes ? <NotesView /> : <Views />}
         </main>
       </div>
+      {ytPlayer ? <YtPlayerBar /> : null}
       <ModalSwitch />
       <div id="toastRoot" className="toasts">
         {tc.toasts.map((t) => (
           <div className="toast" key={t.id}>{t.msg}</div>
         ))}
+      </div>
+    </>
+  );
+}
+
+/* ================= Reproductor de Youtube Manager ================= */
+
+declare global {
+  interface Window { YT?: any; onYouTubeIframeAPIReady?: () => void; }
+}
+
+function YtPlayerBar() {
+  const tc = useTC();
+  const { ytPlayer, stopYt, playYt } = useApp();
+  const yp = ytPlayer!;
+  const cur = tc.db.ytVideos.find((v) => v.id === yp.videoId);
+  const list = tc.db.ytLists.find((l) => l.id === yp.listId);
+  const queue = (list ? tc.db.ytVideos.filter((v) => v.listId === list.id && !v.deletedAt) : [])
+    .slice().sort(T.byOrder);
+
+  const hostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<any>(null);
+  const [apiReady, setApiReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [pos, setPos] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [shuffle, setShuffle] = useState(false);
+  const [sleep, setSleep] = useState("Off");
+  const [big, setBig] = useState(false);
+  const accRef = useRef(0);
+  const lastPosRef = useRef(0);
+  const durSavedRef = useRef<string>("");
+  const curRef = useRef(cur);
+  curRef.current = cur;
+  const queueRef = useRef(queue);
+  queueRef.current = queue;
+  const shuffleRef = useRef(shuffle);
+  shuffleRef.current = shuffle;
+
+  const flush = useCallback((finalPos?: number) => {
+    const v = curRef.current;
+    const p = playerRef.current;
+    if (!v || !p || typeof p.getCurrentTime !== "function") return;
+    const add = accRef.current;
+    accRef.current = 0;
+    const position = finalPos !== undefined ? finalPos : (p.getCurrentTime() || 0);
+    if (add >= 1 || finalPos !== undefined) tc.addYtProgress(v.youtubeId, position, add);
+  }, [tc]);
+
+  const step = useCallback((dir: number) => {
+    const v = curRef.current;
+    if (!v) return false;
+    const q = queueRef.current;
+    const i = q.findIndex((x) => x.id === v.id);
+    if (i < 0) return false;
+    let n = shuffleRef.current && dir > 0
+      ? Math.floor(Math.random() * q.length)
+      : i + dir;
+    if (n === i && q.length > 1) n = (i + 1) % q.length;
+    if (n < 0 || n >= q.length) return false;
+    playYt(v.listId, q[n].id);
+    return true;
+  }, [playYt]);
+
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  /* Cargar la API de YouTube una sola vez */
+  useEffect(() => {
+    if (window.YT && window.YT.Player) { setApiReady(true); return; }
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (prev) prev(); setApiReady(true); };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      const s = document.createElement("script");
+      s.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(s);
+    }
+  }, []);
+
+  /* Crear el reproductor o cambiar de video */
+  useEffect(() => {
+    if (!apiReady || !hostRef.current || !cur) return;
+    const startAt = cur.watched ? 0 : Math.floor(cur.progressSec || 0);
+    if (playerRef.current && typeof playerRef.current.loadVideoById === "function") {
+      accRef.current = 0; lastPosRef.current = 0;
+      playerRef.current.loadVideoById({ videoId: cur.youtubeId, startSeconds: startAt });
+      return;
+    }
+    const player = new window.YT.Player(hostRef.current, {
+      videoId: cur.youtubeId,
+      playerVars: { autoplay: 1, rel: 0, playsinline: 1, start: startAt },
+      events: {
+        onStateChange: (e: any) => {
+          if (e.data === 1) setPlaying(true);
+          else if (e.data === 2) { setPlaying(false); flushRef.current(); }
+          else if (e.data === 0) {
+            setPlaying(false);
+            flushRef.current();
+            const v = curRef.current;
+            if (v) {
+              tc.setYtWatched(v.youtubeId, true);
+              tc.toast("Visto ✓ — se marca solo al terminar");
+              if (!stepRef.current(1)) { /* fin de la lista */ }
+            }
+          }
+        },
+        onError: (e: any) => {
+          if ([100, 101, 150, 153].includes(e.data)) {
+            const v = curRef.current;
+            if (v && !v.noEmbed) {
+              tc.saveYtVideo({ ...v, noEmbed: true });
+              tc.toast("Este video no permite inserción (⛔). Ábrelo en YouTube.");
+            }
+          }
+        },
+      },
+    });
+    playerRef.current = player;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiReady, yp.videoId]);
+
+  /* Reloj de progreso + tiempo invertido */
+  useEffect(() => {
+    const t = setInterval(() => {
+      const p = playerRef.current;
+      const v = curRef.current;
+      if (!p || !v || typeof p.getCurrentTime !== "function") return;
+      let state = -1;
+      try { state = p.getPlayerState(); } catch { return; }
+      const now = p.getCurrentTime() || 0;
+      const d = p.getDuration() || 0;
+      setPos(now); if (d) setDur(d);
+      if (state === 1) {
+        const delta = now - lastPosRef.current;
+        if (delta > 0 && delta < 5) accRef.current += delta;
+        if (accRef.current >= 5) flushRef.current(now);
+        if (d > 0 && !v.durationSec && durSavedRef.current !== v.id) {
+          durSavedRef.current = v.id;
+          tc.saveYtVideo({ ...v, durationSec: Math.round(d) });
+        }
+      }
+      lastPosRef.current = now;
+    }, 1000);
+    return () => clearInterval(t);
+  }, [tc]);
+
+  /* Sleep timer */
+  useEffect(() => {
+    if (sleep === "Off") return;
+    const mins = parseInt(sleep, 10) || 0;
+    const t = window.setTimeout(() => {
+      if (playerRef.current && typeof playerRef.current.pauseVideo === "function") playerRef.current.pauseVideo();
+      tc.toast("😴 Sleep timer: reproducción en pausa");
+      setSleep("Off");
+    }, mins * 60000);
+    return () => window.clearTimeout(t);
+  }, [sleep, tc]);
+
+  /* Al cerrar la barra se destruye el reproductor */
+  useEffect(() => {
+    document.body.classList.add("yt-open");
+    return () => {
+      document.body.classList.remove("yt-open");
+      if (playerRef.current && typeof playerRef.current.destroy === "function") {
+        try { playerRef.current.destroy(); } catch { /* noop */ }
+      }
+      playerRef.current = null;
+    };
+  }, []);
+
+  /* Si el video o la lista se eliminan mientras suenan, se cierra el reproductor */
+  useEffect(() => {
+    if (!cur || !list) stopYt();
+  }, [cur, list, stopYt]);
+
+  /* Si el video resulta no incrustable, se destruye la instancia */
+  useEffect(() => {
+    if (cur && cur.noEmbed && playerRef.current) {
+      try { playerRef.current.destroy(); } catch { /* noop */ }
+      playerRef.current = null;
+    }
+  }, [cur]);
+
+  if (!cur || !list) return null;
+  const idx = queue.findIndex((v) => v.id === cur.id);
+  const next = queue[idx + 1];
+  const total = dur || cur.durationSec || 0;
+  const pct = total ? Math.min(100, (pos / total) * 100) : 0;
+  const sleepOpts = ["Off", "5 min", "10 min", "20 min", "30 min"];
+
+  return (
+    <>
+      <div className={"yt-panel" + (big ? " big" : "")}>
+        {cur.noEmbed ? (
+          <div className="yt-noembed">
+            <div className="yt-noembed-ico">⛔</div>
+            <p>Este video no permite verse dentro de la app.</p>
+            <a className="btn primary" href={"https://www.youtube.com/watch?v=" + cur.youtubeId}
+              target="_blank" rel="noopener">▶ Abrir en YouTube</a>
+          </div>
+        ) : (
+          <div className="yt-frame"><div ref={hostRef} className="yt-frame-host"></div></div>
+        )}
+        <button className="yt-panel-btn" title={big ? "Reducir" : "Ampliar"}
+          onClick={() => setBig(!big)}>{big ? "🗗" : "⛶"}</button>
+      </div>
+      <div className="yt-bar">
+        <div className="yt-bar-left">
+          <img className="yt-bar-thumb" src={cur.thumbnail || T.ytThumb(cur.youtubeId)} alt="" />
+          <div className="yt-bar-meta">
+            <div className="yt-bar-title" title={cur.title}>{cur.title}</div>
+            <div className="yt-bar-sub">{cur.channelName} · {list.name}</div>
+          </div>
+        </div>
+        <div className="yt-bar-center">
+          <div className="yt-bar-btns">
+            <button className={"yt-ibtn" + (shuffle ? " on" : "")} title="Aleatorio"
+              onClick={() => setShuffle(!shuffle)}>🔀</button>
+            <button className="yt-ibtn" title="Anterior" onClick={() => step(-1)}>⏮</button>
+            <button className="yt-ibtn main" title={playing ? "Pausa" : "Reproducir"}
+              onClick={() => {
+                const p = playerRef.current; if (!p) return;
+                if (playing) p.pauseVideo(); else p.playVideo();
+              }}>{playing ? "⏸" : "▶"}</button>
+            <button className="yt-ibtn" title="Siguiente" onClick={() => step(1)}>⏭</button>
+          </div>
+          <div className="yt-track">
+            <span>{T.fmtDur(pos)}</span>
+            <div className="yt-progress" onClick={(e) => {
+              const p = playerRef.current; if (!p || !total) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+              p.seekTo(frac * total, true);
+              setPos(frac * total);
+            }}><i style={{ width: pct + "%" }}></i></div>
+            <span>{T.fmtDur(total)}</span>
+          </div>
+        </div>
+        <div className="yt-bar-right">
+          <button className={"chip-btn" + (cur.watched ? " on" : "")}
+            title="Marcar / desmarcar como visto"
+            onClick={() => tc.setYtWatched(cur.youtubeId, !cur.watched)}>
+            {cur.watched ? "✓ Visto" : "○ Marcar visto"}</button>
+          <button className={"chip-btn" + (sleep !== "Off" ? " on" : "")}
+            title="Sleep timer: pausar dentro de…"
+            onClick={() => setSleep(sleepOpts[(sleepOpts.indexOf(sleep) + 1) % sleepOpts.length])}>
+            😴 {sleep}</button>
+          <span className="yt-next" title={next ? next.title : ""}>
+            {next ? "Siguiente: " + next.title : "Fin de la lista"}</span>
+          <button className="yt-ibtn" title="Cerrar reproductor"
+            onClick={() => { flush(); stopYt(); }}>✕</button>
+        </div>
       </div>
     </>
   );
@@ -164,7 +425,7 @@ type SRItem = { kind: string; title: string; url: string; fav: string; sub: stri
 
 function SearchBox() {
   const tc = useTC();
-  const { liveBookmarks, liveAccounts, liveAssistants, liveReminders, goItem } = useApp();
+  const { liveBookmarks, liveAccounts, liveReminders, goItem } = useApp();
   const [q, setQ] = useState("");
   const [groups, setGroups] = useState<{ label: string; items: SRItem[] }[]>([]);
   const [items, setItems] = useState<SRItem[]>([]);
@@ -188,11 +449,7 @@ function SearchBox() {
       .filter((a) => ((a.name || "") + " " + (a.url || "") + " " + (a.username || "") + " " + (a.email || "") + " " + (a.note || "")).toLowerCase().includes(qq))
       .slice(0, 5)
       .map((a) => ({ kind: "account", title: a.name, url: a.url, fav: T.faviconFor(a.url), sub: "Cuenta · " + T.domainOf(a.url), data: a }));
-    const asis = liveAssistants()
-      .filter((a) => ((a.name || "") + " " + (a.url || "") + " " + (a.username || "") + " " + (a.email || "") + " " + (a.note || "")).toLowerCase().includes(qq))
-      .slice(0, 5)
-      .map((a) => ({ kind: "assistant", title: a.name, url: a.url, fav: T.faviconFor(a.url), sub: "Asistente · " + T.domainOf(a.url), data: a }));
-    if (accs.length || asis.length) gs.push({ label: "🔑 Cuentas y asistentes", items: accs.concat(asis) });
+    if (accs.length) gs.push({ label: "🔑 Cuentas", items: accs });
     const rems = liveReminders()
       .filter((r) => ((r.title || "") + " " + (r.note || "") + " " + (r.url || "")).toLowerCase().includes(qq))
       .slice(0, 5)
@@ -202,7 +459,7 @@ function SearchBox() {
     const flat: SRItem[] = [];
     gs.forEach((g) => g.items.forEach((it) => flat.push(it)));
     setGroups(gs); setItems(flat); setActive(flat.length ? 0 : -1); setOpen(true);
-  }, [liveBookmarks, liveAccounts, liveAssistants, liveReminders, hide]);
+  }, [liveBookmarks, liveAccounts, liveReminders, hide]);
 
   useEffect(() => {
     const el = document.querySelector(".sr-item.active") as HTMLElement | null;
@@ -216,7 +473,6 @@ function SearchBox() {
     if (!it) return;
     if (it.kind === "reminder") goItem("reminders");
     else if (it.kind === "account") goItem("accounts");
-    else if (it.kind === "assistant") goItem("assistants");
     else {
       tc.openUrl(it.url);
       tc.markBookmarkOpened(it.data.id);
@@ -554,6 +810,7 @@ export function Sidebar() {
           if (k === "allfolders") return <AllFoldersSec key={k} />;
           if (k === "spaces") return <SpacesSec key={k} />;
           if (k === "misitems") return <MisItemsSec key={k} />;
+          if (k === "youtube") return <YoutubeSec key={k} />;
           if (k === "tags") return <TagsSec key={k} />;
           /* NOTA: sección «Sesiones guardadas» no portable a web (chrome.tabs) — omitida */
           return null;
@@ -756,7 +1013,7 @@ function SpaceNode({ sp }: { sp: T.Space }) {
 function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: string | null; depth: number }) {
   const tc = useTC();
   const app = useApp();
-  const { ui, liveFolders, childFolders, isCollapsed, toggleCollapse, folderById, countInTree, openModal, goFolder, setUi } = app;
+  const { ui, liveFolders, childFolders, isCollapsed, toggleCollapse, folderById, countDirect, openModal, goFolder, setUi } = app;
   const { clearDropMarks } = useDnD();
   const kids = (parentId
     ? childFolders(parentId)
@@ -839,7 +1096,7 @@ function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: s
               : <span className="chev-spacer"></span>}
             <span className="folder-ico"><T.FolderIconEl f={f} size={15} /></span>
             <span className="side-name">{f.name}</span>
-            <span className="count">{countInTree(f.id)}</span>
+            <span className="count">{countDirect(f.id)}</span>
             <span className="row-actions">
               <button className="icon-btn" data-act="add" title="Crear subcarpeta">＋</button>
               <button className="icon-btn" data-act="rename" title="Editar">✎</button>
@@ -877,6 +1134,114 @@ function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: s
 }
 
 /* ---------- Mis items (sidebar) ---------- */
+
+/* ---------- Youtube Manager (bloque propio del sidebar, v2.3.8) ---------- */
+
+function YoutubeSec() {
+  const tc = useTC();
+  const { ui, goYt, openModal, liveYtLists, liveYtVideos, liveYtChannels } = useApp();
+  const { clearDropMarks } = useDnD();
+  const ulRef = useRef<HTMLUListElement>(null);
+
+  const orderedKeys = () => {
+    const saved = (tc.db.settings.ytOrder || []).filter((k) => YT_KEYS.includes(k));
+    return saved.concat(YT_KEYS.filter((k) => !saved.includes(k)));
+  };
+  const isExpanded = () => {
+    const m = tc.db.settings.expandedItems || {};
+    return m.youtube !== undefined ? !!m.youtube : true;
+  };
+  const toggleExpanded = () => {
+    tc.updateSettings({ expandedItems: { ...(tc.db.settings.expandedItems || {}), youtube: !isExpanded() } });
+  };
+  const expanded = isExpanded();
+
+  const lists = liveYtLists();
+  const videos = liveYtVideos();
+  const countOf = (key: string) => {
+    if (key === "ytlists") return lists.filter((l) => !l.parentId).length;
+    if (key === "ytsubs") return liveYtChannels().length;
+    if (key === "ytdone") return lists.filter((l) => {
+      const vs = videos.filter((v) => v.listId === l.id);
+      return vs.length > 0 && vs.every((v) => v.watched);
+    }).length;
+    return 0;
+  };
+  const active = (key: string) =>
+    ui.view === key || (key === "ytlists" && ui.view === "ytlist");
+
+  return (
+    <SecShell secKey="youtube" className="side-section">
+      <ul className="item-tree" ref={ulRef}>
+        <li className="item-section">
+          <div className={"item-head" + (ui.view.startsWith("yt") ? " active" : "")} role="button" tabIndex={0}
+            title="Youtube Manager: tus listas y canales de YouTube"
+            onClick={(e) => {
+              const t = e.target as HTMLElement;
+              if (t.closest('[data-act="add"]')) { e.stopPropagation(); openModal("ytlist", { parentId: null }); return; }
+              if (t.closest(".chev")) { toggleExpanded(); return; }
+              if (t.closest(".sec-grip")) return;
+              goYt("ytlists");
+            }}>
+            <span className="chev">{expanded ? "▾" : "▸"}</span>
+            <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
+            <span className="side-name">📺 YOUTUBE MANAGER</span>
+            <span className="icon-btn item-add" data-act="add" title="Nueva lista">＋</span>
+          </div>
+          {expanded && (
+            <ul className="item-rows">
+              {orderedKeys().map((key) => {
+                const d = YT_DEFS[key];
+                return (
+                  <li className="item-row-wrap" data-wrap={key} key={key}>
+                    <div className={"item-row" + (active(key) ? " active" : "")} draggable
+                      data-item={key} title={d.hint}
+                      onClick={() => goYt(key)}
+                      onDragStart={(e) => {
+                        dragState = { type: T.DT_YTSEC, id: key };
+                        e.dataTransfer.setData(T.DT_YTSEC, key);
+                        e.dataTransfer.effectAllowed = "move";
+                        (e.currentTarget as HTMLElement).classList.add("dragging");
+                      }}
+                      onDragEnd={(e) => {
+                        (e.currentTarget as HTMLElement).classList.remove("dragging");
+                        clearDropMarks(ulRef.current);
+                      }}
+                      onDragOver={(e) => {
+                        if (!T.hasDT(e, T.DT_YTSEC)) return;
+                        e.preventDefault(); e.dataTransfer.dropEffect = "move";
+                        if (!dragState || dragState.id === key) return;
+                        (e.currentTarget as HTMLElement).classList.add("drop-before");
+                      }}
+                      onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-before")}
+                      onDrop={(e) => {
+                        if (!T.hasDT(e, T.DT_YTSEC)) return;
+                        e.preventDefault(); e.stopPropagation();
+                        (e.currentTarget as HTMLElement).classList.remove("drop-before");
+                        const dragKey = dragState && dragState.id;
+                        dragState = null;
+                        if (!dragKey || dragKey === key) return;
+                        const keys = orderedKeys().filter((k) => k !== dragKey);
+                        const to = keys.indexOf(key);
+                        if (to < 0) return;
+                        keys.splice(to, 0, dragKey);
+                        tc.updateSettings({ ytOrder: keys });
+                      }}>
+                      <span className="chev-spacer"></span>
+                      <span className="item-ico">{d.icon}</span>
+                      <span className="side-name">{d.label}</span>
+                      <span className="count">{countOf(key)}</span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </li>
+      </ul>
+    </SecShell>
+  );
+}
 
 function MisItemsSec() {
   const tc = useTC();
@@ -1055,7 +1420,7 @@ function HelpModals() {
             <li>Añade <b>etiquetas</b> al editar un marcador y fíltralas desde la barra lateral; cada etiqueta tiene su <b>color</b> (cámbialo en ⚙️ → «Editar etiquetas»).</li>
             <li>La barra lateral se <b>colapsa sola</b> y se abre al pasar el ratón; fíjala con 📌.</li></ul>
           <h4>Mis items</h4>
-          <p>La sección <b>🗂 MIS ITEMS</b> de la barra lateral agrupa: <b>🔑 Cuentas</b> y <b>🤖 Asistentes IA</b> (nombre, URL, usuario, email, contraseña y logo automático del dominio), <b>⏰ Recordatorios</b> (te avisan con notificación aunque el panel esté cerrado, con color e icono propios), <b>⭐ Favoritos</b>, <b>🕘 Historial</b>, <b>🗑 Papelera</b> y <b>🔖 Haciendo</b>. Todo se puede reordenar arrastrando.</p>
+          <p>La sección <b>🗂 MIS ITEMS</b> de la barra lateral agrupa: <b>🔑 Cuentas</b> (nombre, URL, usuario, email, contraseña y logo automático del dominio), <b>⏰ Recordatorios</b> (te avisan con notificación aunque el panel esté cerrado, con color e icono propios), <b>⭐ Favoritos</b>, <b>🕘 Historial</b>, <b>🗑 Papelera</b> y <b>🔖 Haciendo</b>. Todo se puede reordenar arrastrando.</p>
           <h4>Papelera</h4>
           <p>Todo lo que elimines va a la <b>🗑 Papelera</b>: puedes restaurarlo, eliminarlo para siempre o vaciarla. Los elementos se purgan solos a los <b>30 días</b>.</p>
           <h4>Notas</h4>
@@ -1097,7 +1462,12 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.1</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.8</h3><ul>
+          <li>📺 <b>Youtube Manager</b>: bloque nuevo en la barra lateral con tus listas y sublistas de YouTube (icono, imagen y color como en los spaces), reproductor integrado, suscripciones por categorías, listas completadas y drag & drop en todo.</li>
+          <li>✓ <b>Marcar y desmarcar vistos</b> con un clic en el círculo de cada video; al terminar un video se marca solo, y el visto se sincroniza entre tus listas.</li>
+          <li>🗂 <b>Arreglo</b>: los marcadores de una subcarpeta ya no aparecen en la carpeta raíz; cada marcador sale solo donde lo guardas.</li>
+          <li>🤖 <b>«Asistentes IA» eliminado</b> de MIS ITEMS, a petición tuya.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.3.1</h4><ul>
           <li>🚪 <b>Cerrar sesión</b>: nuevo botón en el menú de Configuración para cambiar de cuenta.</li>
         </ul><h4 style={{ marginTop: 14 }}>v2.3.0</h4><ul>
           <li>🏠 <b>Home en la barra lateral</b>: la app arranca en Home por defecto.</li>
@@ -1145,7 +1515,6 @@ function HelpModals() {
         <h3>＋ Nuevo item</h3>
         <div className="item-pick">
           <button className="btn item-pick-btn" onClick={() => { closeModal(); openModal("account", { id: null, coll: "accounts" }); }}>🔑 Cuenta</button>
-          <button className="btn item-pick-btn" onClick={() => { closeModal(); openModal("account", { id: null, coll: "assistants" }); }}>🤖 Asistente IA</button>
           <button className="btn item-pick-btn" onClick={() => { closeModal(); openModal("reminder", { id: null }); }}>⏰ Recordatorio</button>
         </div>
         <div className="modal-actions"><button className="btn" onClick={closeModal}>Cancelar</button></div>

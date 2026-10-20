@@ -1185,3 +1185,116 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .login-error { margin: 0 0 16px; font-size: 14px; color: var(--danger); }
 .login-btn { width: 100%; padding: 11px; font-size: 15px; font-weight: 600; font-family: inherit; color: var(--bg); background: var(--accent); border: none; border-radius: 9px; cursor: pointer; }
 .login-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* ================= Youtube Manager (v2.3.8) ================= */
+
+/* Tarjetas de lista */
+.yt-lcard .band { position: relative; }
+.yt-band-n { position: absolute; top: 8px; right: 10px; background: rgba(0,0,0,.35); color: #fff; font-size: 11.5px; padding: 2px 9px; border-radius: 20px; }
+.yt-prog { height: 6px; background: var(--card-2); border-radius: 6px; margin-top: 9px; overflow: hidden; }
+.yt-prog i { display: block; height: 100%; background: var(--accent); border-radius: 6px; }
+.yt-lfoot { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.yt-done-badge { color: #34a853; font-weight: 700; }
+.yt-lactions { margin-left: auto; display: flex; gap: 2px; }
+.yt-lcard.yt-mini .band { height: 44px; }
+.yt-sec-title { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 18px 0 4px; }
+.cards.yt-subgrid { grid-template-columns: repeat(auto-fill, minmax(calc(235px * var(--cardzoom, 1)), 1fr)); margin-top: 10px; }
+.cards.yt-vgrid { grid-template-columns: repeat(auto-fill, minmax(calc(265px * var(--cardzoom, 1)), 1fr)); }
+
+/* Tarjetas de video */
+.yt-vcard { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.yt-vcard.playing { box-shadow: 0 0 0 2px var(--accent); }
+.yt-thumb { position: relative; aspect-ratio: 16 / 9; background: #111; flex: 0 0 auto; }
+.yt-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.yt-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 46px; height: 34px; background: rgba(15,15,15,.82); color: #fff; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; pointer-events: none; }
+.yt-dur { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.8); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 5px; }
+.yt-noembed-badge { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,.65); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
+.yt-vprog { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.35); }
+.yt-vprog i { display: block; height: 100%; background: #e5484d; }
+.yt-vbody { padding: 10px 12px 12px; }
+.yt-vtitle { font-size: 13.5px; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.yt-vchan { color: var(--muted); font-size: 12.3px; margin-top: 3px; display: flex; align-items: center; }
+.yt-vdel { margin-left: auto; opacity: 0; }
+.yt-vcard:hover .yt-vdel, .yt-vrow:hover .yt-vdel { opacity: 1; }
+
+/* Botón de visto (marcar / desmarcar) */
+.yt-seen { position: absolute; top: 8px; right: 8px; width: 25px; height: 25px; border-radius: 50%; border: 2px solid #dfe4ea; background: #fff; color: #b6bdc7; font-size: 12px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.25); padding: 0; z-index: 2; }
+.yt-seen:hover { transform: scale(1.15); }
+.yt-seen.done { background: #34a853; border-color: #34a853; color: #fff; }
+.yt-seen.part { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+.yt-vrow .yt-seen { position: static; flex: 0 0 auto; box-shadow: none; }
+.yt-vrow.playing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.yt-row-thumb { width: 118px; flex: 0 0 auto; }
+.yt-row-thumb img { width: 118px; height: 66px; object-fit: cover; border-radius: 8px; display: block; }
+
+/* Tablero de Youtube Manager */
+.yt-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; margin-top: 14px; }
+.yt-col { background: var(--card-2); border: 1px solid var(--border); border-radius: 14px; padding: 12px; min-height: 200px; }
+.yt-col.drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+.yt-col h4 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; display: flex; justify-content: space-between; }
+.yt-col .yt-vcard, .yt-col .yt-lcard { margin-bottom: 12px; }
+.yt-col-empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 14px 0; }
+@media (max-width: 900px) { .yt-board { grid-template-columns: 1fr; } }
+
+/* Suscripciones */
+.yt-cat-sec { border-radius: 14px; padding: 2px 6px 6px; }
+.yt-cat-sec.drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+.yt-cat-h { display: flex; align-items: center; gap: 9px; font-size: 16.5px; font-weight: 700; margin: 20px 0 12px; cursor: default; }
+.yt-cat-h[draggable="true"] { cursor: grab; }
+.yt-cat-h.drop-before { box-shadow: 0 -2px 0 var(--accent); }
+.yt-cat-grip { color: var(--muted); font-size: 13px; cursor: grab; opacity: .6; }
+.yt-cat-count { background: var(--card-2); border: 1px solid var(--border); color: var(--muted); font-size: 11.5px; padding: 1px 8px; border-radius: 20px; font-weight: 600; }
+.yt-cat-actions { margin-left: auto; display: flex; gap: 2px; opacity: 0; }
+.yt-cat-h:hover .yt-cat-actions { opacity: 1; }
+.yt-cat-empty { color: var(--muted); font-size: 12.5px; padding: 4px 2px 10px; }
+.yt-chgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.yt-chcard { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; cursor: pointer; }
+.yt-chcard:hover { border-color: var(--accent); }
+.yt-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: var(--muted); flex: 0 0 auto; overflow: hidden; }
+.yt-chmeta { flex: 1; min-width: 0; }
+.yt-chname { font-weight: 700; font-size: 13.8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yt-chsub { color: var(--muted); font-size: 12.3px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yt-chactions { display: flex; gap: 2px; opacity: 0; }
+.yt-chcard:hover .yt-chactions { opacity: 1; }
+
+/* Modal: video encontrado */
+.yt-found { display: flex; gap: 12px; align-items: center; background: var(--card-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 12px; }
+.yt-found img { width: 110px; height: 62px; object-fit: cover; border-radius: 7px; }
+.yt-found-title { font-weight: 600; font-size: 13.5px; }
+.yt-found-sub { color: var(--muted); font-size: 12.3px; margin-top: 2px; }
+
+/* Reproductor: panel flotante + barra fija */
+.yt-panel { position: fixed; right: 16px; bottom: 94px; width: 340px; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 12px 34px rgba(10,15,25,.35); z-index: 900; }
+.yt-panel.big { width: min(680px, 92vw); }
+.yt-frame, .yt-frame-host, .yt-frame iframe { width: 100%; height: 100%; display: block; border: 0; }
+.yt-panel-btn { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: 8px; border: none; background: rgba(20,20,20,.75); color: #fff; cursor: pointer; font-size: 14px; z-index: 2; }
+.yt-noembed { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #e5e7eb; text-align: center; padding: 16px; background: #171a21; }
+.yt-noembed-ico { font-size: 30px; }
+.yt-noembed p { font-size: 13px; margin: 0; }
+.yt-bar { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; background: var(--card); border-top: 1px solid var(--border); box-shadow: 0 -3px 14px rgba(20,30,40,.08); display: flex; align-items: center; gap: 16px; padding: 0 16px; z-index: 901; }
+.yt-bar-left { display: flex; align-items: center; gap: 11px; width: 290px; min-width: 0; flex: 0 1 auto; }
+.yt-bar-thumb { width: 84px; height: 48px; border-radius: 8px; object-fit: cover; flex: 0 0 auto; }
+.yt-bar-meta { min-width: 0; }
+.yt-bar-title { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yt-bar-sub { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.yt-bar-center { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; }
+.yt-bar-btns { display: flex; align-items: center; gap: 6px; }
+.yt-ibtn { border: none; background: transparent; font-size: 15px; cursor: pointer; width: 34px; height: 34px; border-radius: 50%; color: var(--text); padding: 0; }
+.yt-ibtn:hover { background: var(--card-2); }
+.yt-ibtn.main { background: var(--text); color: var(--bg); }
+.yt-ibtn.on { color: var(--accent); background: var(--accent-soft); }
+.yt-track { display: flex; align-items: center; gap: 9px; width: 100%; max-width: 560px; color: var(--muted); font-size: 11.5px; }
+.yt-progress { flex: 1; height: 5px; background: var(--card-2); border-radius: 5px; overflow: hidden; cursor: pointer; }
+.yt-progress i { display: block; height: 100%; background: #e5484d; }
+.yt-bar-right { width: 290px; display: flex; justify-content: flex-end; align-items: center; gap: 7px; flex: 0 1 auto; min-width: 0; }
+.chip-btn { border: 1px solid var(--border); background: var(--card); border-radius: 20px; padding: 5px 11px; cursor: pointer; font-size: 12.3px; color: var(--text); white-space: nowrap; font-family: inherit; }
+.chip-btn:hover { background: var(--card-2); }
+.chip-btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.yt-next { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+body.yt-open .main { padding-bottom: 96px; }
+body.yt-open .sidebar { padding-bottom: 96px; }
+@media (max-width: 900px) {
+  .yt-bar-left { width: 150px; } .yt-bar-thumb { display: none; }
+  .yt-bar-right { width: auto; } .yt-next { display: none; }
+  .yt-panel { width: 250px; bottom: 88px; }
+}

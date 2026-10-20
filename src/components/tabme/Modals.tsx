@@ -1223,6 +1223,300 @@ function NoteFullModal({ id }: { id: string }) {
   );
 }
 
+/* ---------- Youtube Manager: modal lista / sublista ---------- */
+
+function YtListModal({ id, parentId }: { id?: string; parentId?: string | null }) {
+  const tc = useTC();
+  const { closeModal, goYtList, liveYtLists } = useApp();
+  const db = tc.db;
+  const edit = id ? db.ytLists.find((l) => l.id === id) : undefined;
+  const parent = !edit && parentId ? liveYtLists().find((l) => l.id === parentId) : undefined;
+  const nameRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef(edit ? edit.color : T.PALETTE[0]);
+  const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
+
+  const save = async () => {
+    const name = nameRef.current?.value.trim() || "";
+    if (!name) { tc.toast("Escribe un nombre"); return; }
+    const ic = iconRef.current;
+    if (edit) {
+      await tc.saveYtList({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      tc.toast("Lista guardada");
+    } else {
+      const nl = await tc.createYtList({
+        name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType,
+        parentId: parentId || null,
+      });
+      tc.toast(parent ? "Sublista creada" : "Lista creada");
+      closeModal();
+      goYtList(nl.id);
+      return;
+    }
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>{edit ? "Editar lista" : parent ? "📁 Nueva sublista en «" + parent.name + "»" : "🎬 Nueva lista"}</h3>
+      <div className="field"><label>Nombre</label>
+        <input type="text" id="mName" ref={nameRef} defaultValue={edit ? edit.name : ""} placeholder="p. ej. Curso de letón" />
+      </div>
+      <IconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
+        onPick={(v) => { iconRef.current = v; }} />
+      <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------- Youtube Manager: modal categoría ---------- */
+
+function YtCatModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal } = useApp();
+  const edit = id ? tc.db.ytCats.find((c) => c.id === id) : undefined;
+  const nameRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef(edit ? edit.color : T.PALETTE[0]);
+  const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
+
+  const save = async () => {
+    const name = nameRef.current?.value.trim() || "";
+    if (!name) { tc.toast("Escribe un nombre"); return; }
+    const ic = iconRef.current;
+    if (edit) {
+      await tc.saveYtCategory({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      tc.toast("Categoría guardada");
+    } else {
+      await tc.createYtCategory({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      tc.toast("Categoría creada");
+    }
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>{edit ? "Editar categoría" : "🗂️ Nueva categoría"}</h3>
+      <div className="field"><label>Nombre</label>
+        <input type="text" id="mName" ref={nameRef} defaultValue={edit ? edit.name : ""} placeholder="p. ej. Aviación" />
+      </div>
+      <IconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
+        onPick={(v) => { iconRef.current = v; }} />
+      <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------- Youtube Manager: modal añadir video ---------- */
+
+function YtVideoModal({ listId }: { listId: string }) {
+  const tc = useTC();
+  const { closeModal, liveYtLists } = useApp();
+  const list = liveYtLists().find((l) => l.id === listId);
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<{ youtubeId: string; title: string; channelName: string } | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  const resolve = async (u: string) => {
+    const yid = T.ytIdOf(u);
+    if (!yid) { setFound(null); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/yt?video=" + encodeURIComponent(u));
+      const j = await r.json();
+      if (r.ok) setFound({ youtubeId: j.youtubeId, title: j.title, channelName: j.channelName || "" });
+      else setFound({ youtubeId: yid, title: "", channelName: "" });
+    } catch {
+      setFound({ youtubeId: yid, title: "", channelName: "" });
+    }
+    setBusy(false);
+  };
+
+  const save = async () => {
+    const yid = found ? found.youtubeId : T.ytIdOf(url);
+    if (!yid) { tc.toast("Pega una URL de video de YouTube válida"); return; }
+    const manual = titleRef.current?.value.trim() || "";
+    await tc.createYtVideo({
+      listId, youtubeId: yid,
+      title: manual || (found ? found.title : "") || "Video de YouTube",
+      channelName: found ? found.channelName : "",
+      thumbnail: T.ytThumb(yid),
+    });
+    tc.toast("Video añadido a «" + (list ? list.name : "la lista") + "»");
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>🎬 Añadir video{list ? " a «" + list.name + "»" : ""}</h3>
+      <div className="field"><label>URL del video de YouTube</label>
+        <input type="url" placeholder="https://www.youtube.com/watch?v=…" autoComplete="off" spellCheck={false}
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); }}
+          onBlur={() => resolve(url)}
+          onPaste={(e) => { const t = e.clipboardData.getData("text"); setTimeout(() => resolve(t), 0); }} />
+      </div>
+      {busy ? <p className="ip-hint">Buscando el video…</p> : null}
+      {found ? (
+        <div className="yt-found">
+          <img src={T.ytThumb(found.youtubeId)} alt="" />
+          <div>
+            <div className="yt-found-title">{found.title || "(sin título: escribe uno abajo)"}</div>
+            <div className="yt-found-sub">{found.channelName}</div>
+          </div>
+        </div>
+      ) : null}
+      <div className="field"><label>Título (solo si quieres cambiarlo)</label>
+        <input type="text" ref={titleRef} placeholder={found ? found.title : "Título del video"} />
+      </div>
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save} disabled={busy}>Añadir</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------- Youtube Manager: modal importar playlist ---------- */
+
+function YtImportModal({ listId }: { listId?: string }) {
+  const tc = useTC();
+  const { closeModal, goYtList, liveYtLists } = useApp();
+  const [url, setUrl] = useState("");
+  const [target, setTarget] = useState(listId || "__new__");
+  const [busy, setBusy] = useState(false);
+  const lists = liveYtLists().sort(T.byOrder);
+  const treeOpts = (parentId: string | null, depth: number): React.ReactNode[] => {
+    const out: React.ReactNode[] = [];
+    lists.filter((l) => (l.parentId || null) === parentId).forEach((l) => {
+      out.push(<option key={l.id} value={l.id}>{"  ".repeat(depth) + (depth ? "↳ " : "") + l.name}</option>);
+      out.push(...treeOpts(l.id, depth + 1));
+    });
+    return out;
+  };
+
+  const run = async () => {
+    const pid = T.ytPlaylistIdOf(url);
+    if (!pid) { tc.toast("Pega una URL de playlist de YouTube válida"); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/yt?list=" + encodeURIComponent(url));
+      const j = await r.json();
+      if (!r.ok) { tc.toast(j.error || "No se pudo importar la playlist"); setBusy(false); return; }
+      let destId = target;
+      if (target === "__new__") {
+        const nl = await tc.createYtList({ name: j.title || "Playlist importada", icon: "🎬", iconType: "emoji", color: T.PALETTE[0], parentId: null });
+        destId = nl.id;
+      }
+      const n = await tc.importYtVideos(destId, j.items || []);
+      const dest = tc.db.ytLists.find((l) => l.id === destId) || liveYtLists().find((l) => l.id === destId);
+      tc.toast(n ? ("Importados " + n + " video(s) a «" + (dest ? dest.name : "la lista") + "»")
+        : "No había videos nuevos que importar (¿ya estaban en la lista?)");
+      await tc.logActivity("create", "Importaste una playlist de YouTube", j.title || "");
+      closeModal();
+      goYtList(destId);
+    } catch {
+      tc.toast("No se pudo importar la playlist");
+    }
+    setBusy(false);
+  };
+
+  return (
+    <ModalShell>
+      <h3>📥 Importar playlist de YouTube</h3>
+      <div className="field"><label>URL de la playlist</label>
+        <input type="url" placeholder="https://www.youtube.com/playlist?list=…" autoComplete="off" spellCheck={false}
+          value={url} onChange={(e) => setUrl(e.target.value)} />
+      </div>
+      <div className="field"><label>Lista de destino</label>
+        <select value={target} onChange={(e) => setTarget(e.target.value)}>
+          <option value="__new__">➕ Crear una lista nueva con el nombre de la playlist</option>
+          {treeOpts(null, 0)}
+        </select>
+      </div>
+      <p className="ip-hint">Se traen hasta 100 videos de una vez (los que ya estén en la lista se saltan). La playlist debe ser pública.</p>
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={run} disabled={busy}>{busy ? "Importando…" : "Importar"}</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------- Youtube Manager: modal canal ---------- */
+
+function YtChannelModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal, liveYtCats } = useApp();
+  const edit = id ? tc.db.ytChannels.find((c) => c.id === id) : undefined;
+  const [url, setUrl] = useState(edit ? edit.url : "");
+  const [name, setName] = useState(edit ? edit.name : "");
+  const [handle, setHandle] = useState(edit ? edit.handle : "");
+  const [cat, setCat] = useState<string>(edit ? (edit.categoryId || "") : "");
+  const [busy, setBusy] = useState(false);
+  const cats = liveYtCats().sort(T.byOrder);
+
+  const resolve = async (u: string) => {
+    if (!/youtube\.com\//i.test(u)) return;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/yt?channel=" + encodeURIComponent(u));
+      const j = await r.json();
+      if (r.ok) {
+        if (j.name && !name) setName(j.name);
+        if (j.handle) setHandle(j.handle);
+      }
+    } catch { /* se rellena a mano */ }
+    setBusy(false);
+  };
+
+  const save = async () => {
+    const n = name.trim();
+    if (!n) { tc.toast("Escribe el nombre del canal (o pega su URL y se rellena solo)"); return; }
+    if (edit) {
+      await tc.saveYtChannel({ ...edit, name: n, url: url.trim(), handle: handle.trim(), categoryId: cat || null });
+      tc.toast("Canal guardado");
+    } else {
+      await tc.createYtChannel({ name: n, url: url.trim(), handle: handle.trim(), categoryId: cat || null });
+      tc.toast("Canal añadido a tus suscripciones");
+    }
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>{edit ? "Editar canal" : "📡 Nuevo canal"}</h3>
+      <div className="field"><label>URL del canal</label>
+        <input type="url" placeholder="https://www.youtube.com/@…" autoComplete="off" spellCheck={false}
+          value={url} onChange={(e) => setUrl(e.target.value)}
+          onBlur={() => resolve(url)}
+          onPaste={(e) => { const t = e.clipboardData.getData("text"); setTimeout(() => resolve(t), 0); }} />
+      </div>
+      {busy ? <p className="ip-hint">Buscando el canal…</p> : null}
+      <div className="field"><label>Nombre</label>
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Se rellena al pegar la URL…" />
+      </div>
+      <div className="field"><label>Categoría</label>
+        <select value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="">Sin categoría</option>
+          {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save} disabled={busy}>Guardar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
 /* ---------- selector «＋ Nuevo item» (Mis Items) ---------- */
 
 function ItemPickModal() {
@@ -1237,7 +1531,6 @@ function ItemPickModal() {
       <h3>＋ Nuevo item</h3>
       <div className="item-pick">
         <button className="btn item-pick-btn" onClick={() => pick("accounts")}>🔑 Cuenta</button>
-        <button className="btn item-pick-btn" onClick={() => pick("assistants")}>🤖 Asistente IA</button>
         <button className="btn item-pick-btn" onClick={() => pick("reminders")}>⏰ Recordatorio</button>
       </div>
       <div className="modal-actions"><button className="btn" onClick={closeModal}>Cancelar</button></div>
@@ -1288,6 +1581,11 @@ export function Modals() {
     case "note": return <NoteEditorModal id={p.id} title={p.title} />;
     case "noteFull": return <NoteFullModal id={p.id} />;
     case "itemPick": return <ItemPickModal />;
+    case "ytlist": return <YtListModal id={p.id} parentId={p.parentId} />;
+    case "ytvideo": return <YtVideoModal listId={p.listId} />;
+    case "ytimport": return <YtImportModal listId={p.listId} />;
+    case "ytchannel": return <YtChannelModal id={p.id} />;
+    case "ytcat": return <YtCatModal id={p.id} />;
     case "colorPick": return <ColorPickModal current={p.current} onPick={p.onPick} />;
     default: return null;
   }

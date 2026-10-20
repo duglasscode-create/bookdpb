@@ -35,6 +35,27 @@ export type Reminder = {
   order: number; createdAt: number; deletedAt: number | null;
 };
 export type Activity = { id: string; type: string; text: string; detail: string; at: number };
+/* ---------- Youtube Manager (v2.3.8) ---------- */
+export type YtList = {
+  id: string; parentId: string | null; name: string;
+  color: string; icon: string; iconType: string;
+  order: number; deletedAt: number | null;
+};
+export type YtVideo = {
+  id: string; listId: string; youtubeId: string; title: string; channelName: string;
+  thumbnail: string; durationSec: number;
+  watched: boolean; progressSec: number; secondsWatched: number; noEmbed: boolean;
+  order: number; deletedAt: number | null;
+};
+export type YtCategory = {
+  id: string; name: string; color: string; icon: string; iconType: string;
+  order: number; deletedAt: number | null;
+};
+export type YtChannel = {
+  id: string; categoryId: string | null; name: string; url: string; handle: string;
+  icon: string; iconType: string;
+  order: number; deletedAt: number | null;
+};
 export type Settings = {
   darkMode: boolean; activeSpaceId: string | null; activeFolderId: string | null;
   displayName: string; openInSameTab: boolean; compactMode: boolean;
@@ -44,11 +65,13 @@ export type Settings = {
   viewModes: Record<string, string>; cardZoom: number;
   itemOrder: string[]; itemExpanded: Record<string, boolean>;
   sidebarLayout: string[]; tagColors: Record<string, string>;
+  ytOrder: string[];
 };
 export type DB = {
   spaces: Space[]; folders: Folder[]; bookmarks: Bookmark[]; notes: NoteT[];
   accounts: Account[]; assistants: Assistant[]; reminders: Reminder[];
   activity: Activity[]; settings: Settings;
+  ytLists: YtList[]; ytVideos: YtVideo[]; ytCats: YtCategory[]; ytChannels: YtChannel[];
 };
 
 /* ---------- Constantes literales del original ---------- */
@@ -82,10 +105,43 @@ export const DT_ACCOUNT = 'application/x-tbc-account';
 export const DT_ASSISTANT = 'application/x-tbc-assistant';
 export const DT_REMINDER = 'application/x-tbc-reminder';
 export const DT_NOTE = 'application/x-tbc-note';
+export const DT_YTLIST = 'application/x-tbc-ytlist';
+export const DT_YTVIDEO = 'application/x-tbc-ytvideo';
+export const DT_YTCHANNEL = 'application/x-tbc-ytchannel';
+export const DT_YTSEC = 'application/x-tbc-ytsec';
+
+/* ---------- Youtube Manager: utilidades ---------- */
+export function ytIdOf(input: string): string | null {
+  const s = (input || '').trim();
+  if (/^[\w-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+export function ytPlaylistIdOf(input: string): string | null {
+  const m = (input || '').match(/[?&]list=([\w-]+)/);
+  if (m) return m[1];
+  if (/^(PL|UU|OL|RD)[\w-]{10,}$/.test((input || '').trim())) return input.trim();
+  return null;
+}
+export function ytThumb(youtubeId: string): string {
+  return 'https://i.ytimg.com/vi/' + youtubeId + '/hqdefault.jpg';
+}
+export function fmtDur(sec: number | null | undefined): string {
+  const s = Math.max(0, Math.round(sec || 0));
+  if (!s) return '';
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(ss).padStart(2, '0');
+}
+export function fmtInvested(sec: number): string {
+  const s = Math.max(0, Math.round(sec || 0));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  if (h) return h + ' h ' + m + ' min';
+  if (m) return m + ' min';
+  return s + ' s';
+}
 
 export const ITEM_DEFS: Record<string, { label: string; icon: string; hint: string }> = {
   accounts: { label: 'Cuentas', icon: '🔑', hint: 'Usuarios y contraseñas de tus sitios' },
-  assistants: { label: 'Asistentes IA', icon: '🤖', hint: 'Tus asistentes de IA favoritos' },
   reminders: { label: 'Recordatorios', icon: '⏰', hint: 'Avisos con fecha y hora' },
   favorites: { label: 'Favoritos', icon: '⭐', hint: 'Tus marcadores destacados' },
   history: { label: 'Historial', icon: '🕘', hint: 'Actividad reciente' },
@@ -285,6 +341,11 @@ export function countInTree(bookmarks: Bookmark[], folders: Folder[], folderId: 
   const ids = new Set(folderTreeIds(folders, folderId));
   return bookmarks.filter((b) => b.folderId && ids.has(b.folderId) && !b.deletedAt).length;
 }
+/* Solo los marcadores que están EN la carpeta (sin contar subcarpetas):
+   cada marcador se muestra únicamente donde se guardó (regla de Duglass). */
+export function countDirect(bookmarks: Bookmark[], folderId: string): number {
+  return bookmarks.filter((b) => b.folderId === folderId && !b.deletedAt).length;
+}
 
 export const DEFAULT_SETTINGS: Settings = {
   darkMode: false, activeSpaceId: null, activeFolderId: null,
@@ -292,5 +353,5 @@ export const DEFAULT_SETTINGS: Settings = {
   collapseFolders: false, sidebarPinned: false,
   collapsedFolders: {}, expandedSpaces: {}, expandedItems: {},
   viewModes: {}, cardZoom: 1, itemOrder: [], itemExpanded: {},
-  sidebarLayout: [], tagColors: {},
+  sidebarLayout: [], tagColors: {}, ytOrder: [],
 };

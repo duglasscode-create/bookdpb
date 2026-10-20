@@ -7,6 +7,7 @@ import * as T from "@/lib/tc";
 import { useTC } from "@/lib/tc-store";
 import { useApp, useDnD } from "./tc-ui";
 import { NotePopover } from "./NotesView";
+import { YtListsView, YtListView, YtSubsView, YtDoneView } from "./YoutubeViews";
 
 type DragState = { type: string; id: string } | null;
 
@@ -308,7 +309,7 @@ function SpaceRow({ sp, dragRef }: { sp: T.Space; dragRef: React.MutableRefObjec
 
 function FolderCard({ f, dragRef }: { f: T.Folder; dragRef: React.MutableRefObject<DragState> }) {
   const tc = useTC();
-  const { goFolder, childFolders, countInTree, folderById, liveBookmarks } = useApp();
+  const { goFolder, childFolders, countDirect, folderById, liveBookmarks } = useApp();
   const { clearDropMarks } = useDnD();
   const subs = childFolders(f.id);
   const bms = liveBookmarks().filter((b) => b.folderId === f.id).slice(0, 5);
@@ -356,7 +357,7 @@ function FolderCard({ f, dragRef }: { f: T.Folder; dragRef: React.MutableRefObje
       <div className="band" style={{ background: f.color }}><T.FolderIconEl f={f} size={26} fallbackFill="#ffffff" /></div>
       <div className="body">
         <div className="fname"><T.FolderIconEl f={f} size={18} /> {f.name}</div>
-        <div className="fmeta">{countInTree(f.id)} marcador(es){subs.length ? " · " + subs.length + " subcarpeta(s)" : ""}</div>
+        <div className="fmeta">{countDirect(f.id)} marcador(es){subs.length ? " · " + subs.length + " subcarpeta(s)" : ""}</div>
         <div className="favs">{bms.map((b) => <span key={b.id}>{T.favEl(b)}</span>)}</div>
         {subs.length ? (
           <div className="subchips">{subs.map((sf) => (
@@ -372,7 +373,7 @@ function FolderCard({ f, dragRef }: { f: T.Folder; dragRef: React.MutableRefObje
                   tc.moveBookmarkTo(raw.slice(9), sf.id).then(() => tc.toast("Marcador movido"));
                 }
               }}>
-              <T.FolderIconEl f={sf} size={12} /><span>{sf.name}</span><b>{countInTree(sf.id)}</b>
+              <T.FolderIconEl f={sf} size={12} /><span>{sf.name}</span><b>{countDirect(sf.id)}</b>
             </button>
           ))}</div>
         ) : null}
@@ -590,8 +591,10 @@ function FolderView({ dragRef }: { dragRef: React.MutableRefObject<DragState> })
     goHome();
     return null;
   }
-  const ids = new Set(T.folderTreeIds(tc.db.folders, f.id));
-  const list = liveBookmarks().filter((b) => b.folderId && ids.has(b.folderId)).sort(T.byOrder);
+  /* Solo los marcadores de ESTA carpeta: los de las subcarpetas se ven
+     únicamente dentro de su subcarpeta (antes se filtraba por el árbol
+     completo y la carpeta raíz «absorbía» los de sus subcarpetas). */
+  const list = liveBookmarks().filter((b) => b.folderId === f.id).sort(T.byOrder);
   const sp = spaceById(f.spaceId);
   const path: T.Folder[] = [];
   let cur: T.Folder | undefined = f;
@@ -691,7 +694,7 @@ function UnusedView({ dragRef }: { dragRef: React.MutableRefObject<DragState> })
 function MisItemsView() {
   const { goItem, getViewMode, itemCount } = useApp();
   const mode = getViewMode("misitems");
-  const keys = ["accounts", "assistants", "reminders", "favorites", "history", "trash", "readlater"];
+  const keys = ["accounts", "reminders", "favorites", "history", "trash", "readlater"];
   const def = { icon: "🗂", label: "Mis Items", hint: "Todos tus items en un vistazo" };
   const counts: Record<string, number> = {};
   keys.forEach((k) => { counts[k] = itemCount(k); });
@@ -1345,12 +1348,15 @@ export function Views() {
   else if (v === "unused") body = <UnusedView dragRef={dragRef} />;
   else if (v === "misitems") body = <MisItemsView />;
   else if (v === "accounts") body = <AccountsView vkey="accounts" />;
-  else if (v === "assistants") body = <AccountsView vkey="assistants" />;
   else if (v === "reminders") body = <RemindersView />;
   else if (v === "favorites") body = <FavoritesView dragRef={dragRef} />;
   else if (v === "history") body = <HistoryView />;
   else if (v === "trash") body = <TrashView />;
   else if (v === "readlater") body = <ReadLaterView dragRef={dragRef} />;
+  else if (v === "ytlists") body = <YtListsView />;
+  else if (v === "ytlist") body = <YtListView />;
+  else if (v === "ytsubs") body = <YtSubsView />;
+  else if (v === "ytdone") body = <YtDoneView />;
 
   return (
     <>

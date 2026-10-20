@@ -2,7 +2,7 @@
    Estado de UI + helpers, portados literalmente de TabmeCode v1.6.3 (newtab.js).
    El store (tc-store) aporta los datos; aquí vive el `state` de navegación. */
 "use client";
-import React, { createContext, useContext, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useCallback, useMemo, useState } from "react";
 import { useTC } from "@/lib/tc-store";
 import * as T from "@/lib/tc";
 
@@ -17,6 +17,7 @@ export type UiState = {
   histFilter: string;
   remindersTab: string;
   trashTab: string;
+  ytListId: string | null;
 };
 export type ModalState = { kind: string; props?: any } | null;
 
@@ -28,6 +29,17 @@ type AppCtx = {
   goFolder: (folderId: string) => void;
   goItem: (view: string) => void;
   goTag: (tag: string) => void;
+  /* youtube manager */
+  goYt: (view: string) => void;
+  goYtList: (id: string) => void;
+  liveYtLists: () => T.YtList[];
+  liveYtVideos: () => T.YtVideo[];
+  liveYtCats: () => T.YtCategory[];
+  liveYtChannels: () => T.YtChannel[];
+  ytListById: (id: string | null) => T.YtList | undefined;
+  ytPlayer: { listId: string; videoId: string } | null;
+  playYt: (listId: string, videoId: string) => void;
+  stopYt: () => void;
   modal: ModalState;
   openModal: (kind: string, props?: any) => void;
   closeModal: () => void;
@@ -56,6 +68,7 @@ type AppCtx = {
   getZoom: () => number;
   setZoom: (delta: number) => void;
   countInTree: (folderId: string) => number;
+  countDirect: (folderId: string) => number;
   trashEntries: () => { kind: string; label: string; icon: string; id: string; name: string; deletedAt: number }[];
   visibleNotes: () => T.NoteT[];
   noteCounts: () => { all: number; archived: number; trash: number };
@@ -87,6 +100,15 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
   const liveAccounts = useCallback(() => db.accounts.filter((a) => !a.deletedAt), [db]);
   const liveAssistants = useCallback(() => db.assistants.filter((a) => !a.deletedAt), [db]);
   const liveReminders = useCallback(() => db.reminders.filter((r) => !r.deletedAt), [db]);
+  const liveYtLists = useCallback(() => (db.ytLists || []).filter((l) => !l.deletedAt), [db]);
+  const liveYtVideos = useCallback(() => (db.ytVideos || []).filter((v) => !v.deletedAt), [db]);
+  const liveYtCats = useCallback(() => (db.ytCats || []).filter((c) => !c.deletedAt), [db]);
+  const liveYtChannels = useCallback(() => (db.ytChannels || []).filter((c) => !c.deletedAt), [db]);
+  const ytListById = useCallback((id: string | null) =>
+    (db.ytLists || []).find((l) => l.id === id), [db]);
+  const [ytPlayer, setYtPlayer] = useState<{ listId: string; videoId: string } | null>(null);
+  const playYt = useCallback((listId: string, videoId: string) => setYtPlayer({ listId, videoId }), []);
+  const stopYt = useCallback(() => setYtPlayer(null), []);
 
   const folderById = useCallback((id: string | null) =>
     db.folders.find((f) => f.id === id), [db]);
@@ -156,6 +178,9 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
   const countInTree = useCallback((folderId: string) =>
     T.countInTree(liveBookmarks(), liveFolders(), folderId), [db, liveBookmarks, liveFolders]);
 
+  const countDirect = useCallback((folderId: string) =>
+    T.countDirect(liveBookmarks(), folderId), [db, liveBookmarks]);
+
   const persistSelection = useCallback((patch: Partial<UiState>) => {
     tc.updateSettings({
       activeSpaceId: patch.spaceId !== undefined ? patch.spaceId : ui.spaceId,
@@ -183,6 +208,14 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
   const goTag = useCallback((tag: string) => {
     setUi({ view: "tag", tag, notes: false, folderId: null } as Partial<UiState>);
   }, [setUi]);
+  const goYt = useCallback((view: string) => {
+    setUi({ view, notes: false, tag: null, folderId: null } as Partial<UiState>);
+    const main = document.getElementById("main"); if (main) main.scrollTop = 0;
+  }, [setUi]);
+  const goYtList = useCallback((id: string) => {
+    setUi({ view: "ytlist", ytListId: id, notes: false, tag: null, folderId: null } as Partial<UiState>);
+    const main = document.getElementById("main"); if (main) main.scrollTop = 0;
+  }, [setUi]);
 
   const trashEntries = useCallback(() => {
     const out: { kind: string; label: string; icon: string; id: string; name: string; deletedAt: number }[] = [];
@@ -193,7 +226,6 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     push("bookmarks", "Marcador", "🔖", db.bookmarks, (x) => x.title);
     push("notes", "Nota", "📝", db.notes, (x) => x.title);
     push("accounts", "Cuenta", "🔑", db.accounts, (x) => x.name);
-    push("assistants", "Asistente IA", "🤖", db.assistants, (x) => x.name);
     push("reminders", "Recordatorio", "⏰", db.reminders, (x) => x.title);
     return out.sort((a, b) => b.deletedAt - a.deletedAt);
   }, [db]);
@@ -223,7 +255,6 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
 
   const itemCount = useCallback((key: string) => {
     if (key === "accounts") return liveAccounts().length;
-    if (key === "assistants") return liveAssistants().length;
     if (key === "reminders") return liveReminders().filter((r) => !r.done).length;
     if (key === "favorites") return liveBookmarks().filter((b) => b.favorite).length;
     if (key === "history") return db.activity.length;
@@ -235,8 +266,6 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
 
   const itemPreview = useCallback((key: string): { name: string; sub: string }[] => {
     if (key === "accounts") return liveAccounts().slice().sort(T.byOrder).slice(0, 5)
-      .map((a) => ({ name: a.name, sub: T.domainOf(a.url || "") }));
-    if (key === "assistants") return liveAssistants().slice().sort(T.byOrder).slice(0, 5)
       .map((a) => ({ name: a.name, sub: T.domainOf(a.url || "") }));
     if (key === "reminders") return liveReminders().filter((r) => !r.done).slice().sort((a, b) => a.when - b.when).slice(0, 5)
       .map((r) => ({ name: r.title, sub: T.fmtDateTime(r.when) }));
@@ -258,12 +287,14 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
 
   const value: AppCtx = {
     ui, setUi, goHome, goSpace, goFolder, goItem, goTag,
+    goYt, goYtList, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels, ytListById,
+    ytPlayer, playYt, stopYt,
     modal, openModal, closeModal, openDd, setOpenDd,
     liveSpaces, liveFolders, liveBookmarks, liveNotes, liveAccounts, liveAssistants, liveReminders,
     spaceStats, childFolders, folderById, spaceById,
     isCollapsed, toggleCollapse, isExpanded, toggleSpace,
     tagColorOf, allTags, getViewMode, setViewMode, getZoom, setZoom,
-    countInTree, trashEntries, visibleNotes, noteCounts, itemCount, itemPreview,
+    countInTree, countDirect, trashEntries, visibleNotes, noteCounts, itemCount, itemPreview,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

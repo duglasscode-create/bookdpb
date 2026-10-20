@@ -95,6 +95,27 @@ type Ctx = {
   restoreReminder: (id: string) => Promise<void>;
   purgeReminder: (id: string) => Promise<void>;
   reorderReminders: (dragId: string, beforeId: string | null) => Promise<void>;
+  /* youtube manager */
+  createYtList: (input: Partial<T.YtList>) => Promise<T.YtList>;
+  saveYtList: (l: T.YtList) => Promise<void>;
+  deleteYtList: (id: string) => Promise<void>;
+  reorderYtLists: (parentId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
+  createYtVideo: (input: Partial<T.YtVideo> & { listId: string; youtubeId: string }) => Promise<T.YtVideo>;
+  saveYtVideo: (v: T.YtVideo) => Promise<void>;
+  deleteYtVideo: (id: string) => Promise<void>;
+  moveYtVideoToList: (videoId: string, listId: string) => Promise<void>;
+  reorderYtVideos: (listId: string, dragId: string, beforeId: string | null) => Promise<void>;
+  setYtWatched: (youtubeId: string, watched: boolean) => Promise<void>;
+  addYtProgress: (youtubeId: string, posSec: number, addSeconds: number) => Promise<void>;
+  importYtVideos: (listId: string, items: { youtubeId: string; title: string; channelName?: string; durationSec?: number }[]) => Promise<number>;
+  createYtCategory: (input: Partial<T.YtCategory>) => Promise<T.YtCategory>;
+  saveYtCategory: (c: T.YtCategory) => Promise<void>;
+  deleteYtCategory: (id: string) => Promise<void>;
+  reorderYtCategories: (dragId: string, beforeId: string | null) => Promise<void>;
+  createYtChannel: (input: Partial<T.YtChannel>) => Promise<T.YtChannel>;
+  saveYtChannel: (c: T.YtChannel) => Promise<void>;
+  deleteYtChannel: (id: string) => Promise<void>;
+  reorderYtChannels: (categoryId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
   /* activity + trash */
   logActivity: (type: string, text: string, detail?: string) => Promise<void>;
   clearActivity: () => Promise<void>;
@@ -115,6 +136,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   const [dbState, setDbState] = useState<T.DB>(() => ({
     spaces: [], folders: [], bookmarks: [], notes: [],
     accounts: [], assistants: [], reminders: [], activity: [],
+    ytLists: [], ytVideos: [], ytCats: [], ytChannels: [],
     settings: { ...T.DEFAULT_SETTINGS },
   }));
   /* Ref espejo síncrono: permite leer el estado justo después de escribirlo
@@ -151,7 +173,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow] = await Promise.all([
+      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow, ytl, ytv, ytc, yth] = await Promise.all([
         supabase.from("collections").select("*").eq("user_id", userId).order("position", { ascending: true }),
         supabase.from("bookmarks").select("*").eq("user_id", userId),
         supabase.from("bookmark_collections").select("bookmark_id, collection_id").eq("user_id", userId),
@@ -163,6 +185,11 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         supabase.from("reminders").select("*").eq("user_id", userId),
         supabase.from("activity_log").select("*").eq("user_id", userId).order("created_at", { ascending: false }).limit(500),
         supabase.from("user_settings").select("data").eq("user_id", userId).maybeSingle(),
+        /* Youtube Manager (v2.3.8): si las tablas aún no existen, data viene null y se sigue sin ellas */
+        supabase.from("yt_lists").select("*").eq("user_id", userId),
+        supabase.from("yt_videos").select("*").eq("user_id", userId),
+        supabase.from("yt_categories").select("*").eq("user_id", userId),
+        supabase.from("yt_channels").select("*").eq("user_id", userId),
       ]);
       const colRows: Record<string, any>[] = (cols.data || []) as Record<string, any>[];
       const spaceRows = colRows.filter((c) => !c.parent_id && !(c as any).is_deleted);
@@ -252,7 +279,31 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         settings = { ...T.DEFAULT_SETTINGS, ...((setRow.data as any).data as object) };
       }
 
-      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings });
+      const ytLists: T.YtList[] = ((ytl.data || []) as any[]).map((l: any, i: number) => ({
+        id: l.id, parentId: l.parent_id || null, name: l.name || "Lista",
+        color: l.color || T.PALETTE[0], icon: l.icon || "", iconType: l.icon_type || "emoji",
+        order: l.position ?? i, deletedAt: l.is_deleted ? (ts(l.deleted_at) || Date.now()) : null,
+      }));
+      const ytVideos: T.YtVideo[] = ((ytv.data || []) as any[]).map((v: any, i: number) => ({
+        id: v.id, listId: v.list_id, youtubeId: v.youtube_id, title: v.title || "",
+        channelName: v.channel_name || "", thumbnail: v.thumbnail || T.ytThumb(v.youtube_id),
+        durationSec: v.duration_sec || 0, watched: !!v.watched,
+        progressSec: v.progress_sec || 0, secondsWatched: v.seconds_watched || 0,
+        noEmbed: !!v.no_embed, order: v.position ?? i,
+        deletedAt: v.is_deleted ? (ts(v.deleted_at) || Date.now()) : null,
+      }));
+      const ytCats: T.YtCategory[] = ((ytc.data || []) as any[]).map((c: any, i: number) => ({
+        id: c.id, name: c.name || "Categoría", color: c.color || T.PALETTE[0],
+        icon: c.icon || "", iconType: c.icon_type || "emoji",
+        order: c.position ?? i, deletedAt: c.is_deleted ? (ts(c.deleted_at) || Date.now()) : null,
+      }));
+      const ytChannels: T.YtChannel[] = ((yth.data || []) as any[]).map((c: any, i: number) => ({
+        id: c.id, categoryId: c.category_id || null, name: c.name || "", url: c.url || "",
+        handle: c.handle || "", icon: c.icon || "", iconType: c.icon_type || "auto",
+        order: c.position ?? i, deletedAt: c.is_deleted ? (ts(c.deleted_at) || Date.now()) : null,
+      }));
+
+      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings, ytLists, ytVideos, ytCats, ytChannels });
       (window as unknown as { __tcSettings?: T.Settings }).__tcSettings = settings;
       settingsReady.current = true;
 
@@ -1217,6 +1268,283 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     await supabase.from("reminders").update({ is_done: v }).eq("id", id);
   }, [supabase, getDb, setDb]);
 
+  /* ================= Youtube Manager (v2.3.8) ================= */
+  const ytListRow = (l: T.YtList) => ({
+    user_id: userId, parent_id: l.parentId, name: l.name, color: l.color,
+    icon: l.icon || null, icon_type: l.iconType || "emoji", position: l.order ?? 0,
+    is_deleted: !!l.deletedAt, deleted_at: iso(l.deletedAt),
+  });
+  const ytVideoRow = (v: T.YtVideo) => ({
+    user_id: userId, list_id: v.listId, youtube_id: v.youtubeId, title: v.title,
+    channel_name: v.channelName || null, thumbnail: v.thumbnail || null,
+    duration_sec: v.durationSec || 0, watched: !!v.watched,
+    progress_sec: v.progressSec || 0, seconds_watched: v.secondsWatched || 0,
+    no_embed: !!v.noEmbed, position: v.order ?? 0,
+    is_deleted: !!v.deletedAt, deleted_at: iso(v.deletedAt),
+  });
+  const ytCatRow = (c: T.YtCategory) => ({
+    user_id: userId, name: c.name, color: c.color, icon: c.icon || null,
+    icon_type: c.iconType || "emoji", position: c.order ?? 0,
+    is_deleted: !!c.deletedAt, deleted_at: iso(c.deletedAt),
+  });
+  const ytChanRow = (c: T.YtChannel) => ({
+    user_id: userId, category_id: c.categoryId, name: c.name, url: c.url || null,
+    handle: c.handle || null, icon: c.icon || null, icon_type: c.iconType || "auto",
+    position: c.order ?? 0, is_deleted: !!c.deletedAt, deleted_at: iso(c.deletedAt),
+  });
+
+  const createYtList = useCallback(async (input: Partial<T.YtList>) => {
+    const l: T.YtList = {
+      id: T.uid("yl"), parentId: input.parentId || null, name: input.name || "Nueva lista",
+      color: input.color || T.PALETTE[0], icon: input.icon || "", iconType: input.iconType || "emoji",
+      order: 0, deletedAt: null,
+    };
+    setDb((d) => {
+      l.order = T.nextOrder(d.ytLists.filter((x) => (x.parentId || null) === (l.parentId || null)));
+      return { ...d, ytLists: [...d.ytLists, l] };
+    });
+    const { data } = await supabase.from("yt_lists").insert(ytListRow(l)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== l.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, ytLists: d.ytLists.map((x) => (x.id === l.id ? { ...x, id: nid } : x)) }));
+      return { ...l, id: nid };
+    }
+    return l;
+  }, [supabase, userId]);
+
+  const saveYtList = useCallback(async (l: T.YtList) => {
+    setDb((d) => ({ ...d, ytLists: d.ytLists.map((x) => (x.id === l.id ? l : x)) }));
+    await supabase.from("yt_lists").update(ytListRow(l)).eq("id", l.id);
+  }, [supabase, userId]);
+
+  const deleteYtList = useCallback(async (id: string) => {
+    /* Borrado definitivo (la UI pide confirmación antes): la lista, sus
+       sublistas en cascada y todos sus videos. */
+    const cur = getDb();
+    const ids: string[] = [id];
+    let grew = true;
+    while (grew) {
+      grew = false;
+      cur.ytLists.forEach((l) => {
+        if (l.parentId && ids.includes(l.parentId) && !ids.includes(l.id)) { ids.push(l.id); grew = true; }
+      });
+    }
+    const vids = cur.ytVideos.filter((v) => ids.includes(v.listId)).map((v) => v.id);
+    setDb((d) => ({
+      ...d,
+      ytLists: d.ytLists.filter((l) => !ids.includes(l.id)),
+      ytVideos: d.ytVideos.filter((v) => !ids.includes(v.listId)),
+    }));
+    if (vids.length) await supabase.from("yt_videos").delete().in("id", vids);
+    await supabase.from("yt_lists").delete().eq("user_id", userId).in("id", ids);
+  }, [supabase, userId, getDb, setDb]);
+
+  const reorderYtLists = useCallback(async (parentId: string | null, dragId: string, beforeId: string | null) => {
+    let list: T.YtList[] = [];
+    setDb((d) => {
+      list = d.ytLists.filter((l) => !l.deletedAt && (l.parentId || null) === (parentId || null)).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((l) => [l.id, l.order]));
+      return { ...d, ytLists: d.ytLists.map((l) => (m.has(l.id) ? { ...l, order: m.get(l.id)! } : l)) };
+    });
+    await Promise.all(list.map((l) => supabase.from("yt_lists").update({ position: l.order }).eq("id", l.id)));
+  }, [supabase]);
+
+  const createYtVideo = useCallback(async (input: Partial<T.YtVideo> & { listId: string; youtubeId: string }) => {
+    const v: T.YtVideo = {
+      id: T.uid("yv"), listId: input.listId, youtubeId: input.youtubeId,
+      title: input.title || "Video de YouTube", channelName: input.channelName || "",
+      thumbnail: input.thumbnail || T.ytThumb(input.youtubeId),
+      durationSec: input.durationSec || 0, watched: !!input.watched,
+      progressSec: input.progressSec || 0, secondsWatched: input.secondsWatched || 0,
+      noEmbed: !!input.noEmbed, order: 0, deletedAt: null,
+    };
+    setDb((d) => {
+      v.order = T.nextOrder(d.ytVideos.filter((x) => x.listId === v.listId));
+      return { ...d, ytVideos: [...d.ytVideos, v] };
+    });
+    const { data } = await supabase.from("yt_videos").insert(ytVideoRow(v)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== v.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, ytVideos: d.ytVideos.map((x) => (x.id === v.id ? { ...x, id: nid } : x)) }));
+      return { ...v, id: nid };
+    }
+    return v;
+  }, [supabase, userId]);
+
+  const saveYtVideo = useCallback(async (v: T.YtVideo) => {
+    setDb((d) => ({ ...d, ytVideos: d.ytVideos.map((x) => (x.id === v.id ? v : x)) }));
+    await supabase.from("yt_videos").update(ytVideoRow(v)).eq("id", v.id);
+  }, [supabase, userId]);
+
+  const deleteYtVideo = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytVideos: d.ytVideos.filter((v) => v.id !== id) }));
+    await supabase.from("yt_videos").delete().eq("id", id);
+  }, [supabase]);
+
+  const moveYtVideoToList = useCallback(async (videoId: string, listId: string) => {
+    let nv: T.YtVideo | null = null;
+    setDb((d) => {
+      const v = d.ytVideos.find((x) => x.id === videoId);
+      if (!v) return d;
+      nv = { ...v, listId, order: T.nextOrder(d.ytVideos.filter((x) => x.listId === listId)) };
+      return { ...d, ytVideos: d.ytVideos.map((x) => (x.id === videoId ? nv! : x)) };
+    });
+    if (nv) await supabase.from("yt_videos").update({ list_id: listId, position: (nv as T.YtVideo).order }).eq("id", videoId);
+  }, [supabase]);
+
+  const reorderYtVideos = useCallback(async (listId: string, dragId: string, beforeId: string | null) => {
+    let list: T.YtVideo[] = [];
+    setDb((d) => {
+      list = d.ytVideos.filter((v) => !v.deletedAt && v.listId === listId).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((v) => [v.id, v.order]));
+      return { ...d, ytVideos: d.ytVideos.map((v) => (m.has(v.id) ? { ...v, order: m.get(v.id)! } : v)) };
+    });
+    await Promise.all(list.map((v) => supabase.from("yt_videos").update({ position: v.order }).eq("id", v.id)));
+  }, [supabase]);
+
+  /* El visto es POR VIDEO de YouTube (youtube_id), no por fila: si el mismo
+     video está en varias listas, se marca en todas a la vez. */
+  const setYtWatched = useCallback(async (youtubeId: string, watched: boolean) => {
+    setDb((d) => ({
+      ...d,
+      ytVideos: d.ytVideos.map((v) => (v.youtubeId === youtubeId
+        ? { ...v, watched, progressSec: watched ? (v.durationSec || v.progressSec) : 0 }
+        : v)),
+    }));
+    await supabase.from("yt_videos")
+      .update({ watched })
+      .eq("user_id", userId).eq("youtube_id", youtubeId);
+    if (!watched) {
+      await supabase.from("yt_videos").update({ progress_sec: 0 }).eq("user_id", userId).eq("youtube_id", youtubeId);
+    }
+  }, [supabase, userId, setDb]);
+
+  const addYtProgress = useCallback(async (youtubeId: string, posSec: number, addSeconds: number) => {
+    let sw = 0;
+    setDb((d) => {
+      const cur = d.ytVideos.find((v) => v.youtubeId === youtubeId);
+      sw = (cur ? cur.secondsWatched : 0) + Math.max(0, Math.round(addSeconds));
+      return {
+        ...d,
+        ytVideos: d.ytVideos.map((v) => (v.youtubeId === youtubeId
+          ? { ...v, progressSec: Math.max(0, Math.round(posSec)), secondsWatched: sw }
+          : v)),
+      };
+    });
+    await supabase.from("yt_videos")
+      .update({ progress_sec: Math.max(0, Math.round(posSec)), seconds_watched: sw })
+      .eq("user_id", userId).eq("youtube_id", youtubeId);
+  }, [supabase, userId, setDb]);
+
+  const importYtVideos = useCallback(async (listId: string, items: { youtubeId: string; title: string; channelName?: string; durationSec?: number }[]) => {
+    const cur = getDb();
+    const existing = new Set(cur.ytVideos.filter((v) => v.listId === listId && !v.deletedAt).map((v) => v.youtubeId));
+    const fresh = items.filter((it) => it.youtubeId && !existing.has(it.youtubeId));
+    if (!fresh.length) return 0;
+    let order = T.nextOrder(cur.ytVideos.filter((v) => v.listId === listId));
+    const rows = fresh.map((it) => ({
+      user_id: userId, list_id: listId, youtube_id: it.youtubeId, title: it.title || "Video de YouTube",
+      channel_name: it.channelName || null, thumbnail: T.ytThumb(it.youtubeId),
+      duration_sec: it.durationSec || 0, watched: false, progress_sec: 0,
+      seconds_watched: 0, no_embed: false, position: order++, is_deleted: false, deleted_at: null,
+    }));
+    const { data } = await supabase.from("yt_videos").insert(rows).select("*");
+    const added: T.YtVideo[] = ((data || []) as any[]).map((v: any, i: number) => ({
+      id: v.id, listId: v.list_id, youtubeId: v.youtube_id, title: v.title || "",
+      channelName: v.channel_name || "", thumbnail: v.thumbnail || T.ytThumb(v.youtube_id),
+      durationSec: v.duration_sec || 0, watched: !!v.watched, progressSec: v.progress_sec || 0,
+      secondsWatched: v.seconds_watched || 0, noEmbed: !!v.no_embed,
+      order: v.position ?? i, deletedAt: null,
+    }));
+    if (added.length) setDb((d) => ({ ...d, ytVideos: [...d.ytVideos, ...added] }));
+    return added.length;
+  }, [supabase, userId, getDb, setDb]);
+
+  const createYtCategory = useCallback(async (input: Partial<T.YtCategory>) => {
+    const c: T.YtCategory = {
+      id: T.uid("yk"), name: input.name || "Nueva categoría",
+      color: input.color || T.PALETTE[0], icon: input.icon || "", iconType: input.iconType || "emoji",
+      order: 0, deletedAt: null,
+    };
+    setDb((d) => { c.order = T.nextOrder(d.ytCats); return { ...d, ytCats: [...d.ytCats, c] }; });
+    const { data } = await supabase.from("yt_categories").insert(ytCatRow(c)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== c.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, ytCats: d.ytCats.map((x) => (x.id === c.id ? { ...x, id: nid } : x)) }));
+      return { ...c, id: nid };
+    }
+    return c;
+  }, [supabase, userId]);
+
+  const saveYtCategory = useCallback(async (c: T.YtCategory) => {
+    setDb((d) => ({ ...d, ytCats: d.ytCats.map((x) => (x.id === c.id ? c : x)) }));
+    await supabase.from("yt_categories").update(ytCatRow(c)).eq("id", c.id);
+  }, [supabase, userId]);
+
+  const deleteYtCategory = useCallback(async (id: string) => {
+    /* Los canales de la categoría quedan «sin categoría», no se borran. */
+    setDb((d) => ({
+      ...d,
+      ytCats: d.ytCats.filter((c) => c.id !== id),
+      ytChannels: d.ytChannels.map((c) => (c.categoryId === id ? { ...c, categoryId: null } : c)),
+    }));
+    await supabase.from("yt_channels").update({ category_id: null }).eq("user_id", userId).eq("category_id", id);
+    await supabase.from("yt_categories").delete().eq("id", id);
+  }, [supabase, userId, setDb]);
+
+  const reorderYtCategories = useCallback(async (dragId: string, beforeId: string | null) => {
+    let list: T.YtCategory[] = [];
+    setDb((d) => {
+      list = d.ytCats.filter((c) => !c.deletedAt).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((c) => [c.id, c.order]));
+      return { ...d, ytCats: d.ytCats.map((c) => (m.has(c.id) ? { ...c, order: m.get(c.id)! } : c)) };
+    });
+    await Promise.all(list.map((c) => supabase.from("yt_categories").update({ position: c.order }).eq("id", c.id)));
+  }, [supabase]);
+
+  const createYtChannel = useCallback(async (input: Partial<T.YtChannel>) => {
+    const c: T.YtChannel = {
+      id: T.uid("yh"), categoryId: input.categoryId || null, name: input.name || "Canal",
+      url: input.url || "", handle: input.handle || "", icon: input.icon || "",
+      iconType: input.iconType || "auto", order: 0, deletedAt: null,
+    };
+    setDb((d) => {
+      c.order = T.nextOrder(d.ytChannels.filter((x) => (x.categoryId || null) === (c.categoryId || null)));
+      return { ...d, ytChannels: [...d.ytChannels, c] };
+    });
+    const { data } = await supabase.from("yt_channels").insert(ytChanRow(c)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== c.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, ytChannels: d.ytChannels.map((x) => (x.id === c.id ? { ...x, id: nid } : x)) }));
+      return { ...c, id: nid };
+    }
+    return c;
+  }, [supabase, userId]);
+
+  const saveYtChannel = useCallback(async (c: T.YtChannel) => {
+    setDb((d) => ({ ...d, ytChannels: d.ytChannels.map((x) => (x.id === c.id ? c : x)) }));
+    await supabase.from("yt_channels").update(ytChanRow(c)).eq("id", c.id);
+  }, [supabase, userId]);
+
+  const deleteYtChannel = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytChannels: d.ytChannels.filter((c) => c.id !== id) }));
+    await supabase.from("yt_channels").delete().eq("id", id);
+  }, [supabase]);
+
+  const reorderYtChannels = useCallback(async (categoryId: string | null, dragId: string, beforeId: string | null) => {
+    let list: T.YtChannel[] = [];
+    setDb((d) => {
+      list = d.ytChannels.filter((c) => !c.deletedAt && (c.categoryId || null) === (categoryId || null)).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((c) => [c.id, c.order]));
+      return { ...d, ytChannels: d.ytChannels.map((c) => (m.has(c.id) ? { ...c, order: m.get(c.id)! } : c)) };
+    });
+    await Promise.all(list.map((c) => supabase.from("yt_channels").update({ position: c.order }).eq("id", c.id)));
+  }, [supabase]);
+
   const value: Ctx = {
     userId, db, loading, refresh: load, toasts, toast, openUrl,
     saveSpace, createSpace, trashSpace, restoreSpace, purgeSpace, reorderSpaces,
@@ -1236,6 +1564,11 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     toggleAssistantFavorite,
     saveReminder, createReminder, trashReminder, restoreReminder, purgeReminder, reorderReminders,
     toggleReminderDone,
+    createYtList, saveYtList, deleteYtList, reorderYtLists,
+    createYtVideo, saveYtVideo, deleteYtVideo, moveYtVideoToList, reorderYtVideos,
+    setYtWatched, addYtProgress, importYtVideos,
+    createYtCategory, saveYtCategory, deleteYtCategory, reorderYtCategories,
+    createYtChannel, saveYtChannel, deleteYtChannel, reorderYtChannels,
     logActivity, clearActivity, emptyTrash, updateSettings,
   };
 
