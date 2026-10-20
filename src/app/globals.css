@@ -1241,6 +1241,17 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 /* Suscripciones */
 .yt-cat-sec { border-radius: 14px; padding: 2px 6px 6px; }
 .yt-cat-sec.drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
+/* v2.3.12 — Categorías de Suscripciones lado a lado en Cuadrícula/Lista:
+   rejilla que envuelve (como el Tablero), ya no se apilan en vertical.
+   Cada categoría es un bloque; al desplegar una grande, las demás
+   fluyen a su lado y por debajo. */
+.yt-cat-wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(calc(300px * var(--cardzoom, 1)), 100%), 1fr)); gap: 2px 20px; align-items: start; margin-top: 4px; }
+.yt-cat-wrap.list { grid-template-columns: repeat(auto-fill, minmax(min(calc(400px * var(--cardzoom, 1)), 100%), 1fr)); }
+.yt-cat-wrap .yt-cat-sec { min-width: 0; }
+.yt-cat-wrap .yt-cat-h { margin-top: 8px; }
+/* v2.3.12 — Columna del Tablero plegada: solo la cabecera, sin altura mínima */
+.yt-col.yt-col-collapsed { min-height: 0; }
+.yt-col.yt-col-collapsed .yt-cat-h { margin-bottom: 0; }
 .yt-cat-h { display: flex; align-items: center; gap: 9px; font-size: 16.5px; font-weight: 700; margin: 20px 0 12px; cursor: default; }
 .yt-cat-h[draggable="true"] { cursor: grab; }
 .yt-cat-h.drop-before { box-shadow: 0 -2px 0 var(--accent); }

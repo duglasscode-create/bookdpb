@@ -1,4 +1,4 @@
-BOOKDPB v2.3.11 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
+BOOKDPB v2.3.12 — Porte literal de TabmeCode v1.6.3 a web (Vercel + iPad)
 ============================================================================
 
 QUÉ ES
@@ -15,22 +15,18 @@ Tus datos NO se tocan: usa tu mismo proyecto de Supabase.
 
 PASOS
 -----
-1. Ejecuta supabase-migracion-v2.3.11.sql UNA vez en Supabase
-   (Supabase → SQL Editor → New query → pega el contenido → Run).
-   Es una sola línea: añade la columna de la foto (avatar) a la
-   tabla de canales de Youtube Manager. Es seguro y re-ejecutable:
-   no borra nada ni toca tus datos actuales. Hazlo en el proyecto
-   de Supabase de la cuenta que uses en el iPad.
-   (El SQL de las tablas de Youtube Manager era el de la v2.3.8:
-   si nunca lo ejecutaste, haz ese primero. Y si aún no lo hiciste
-   en su día, también supabase-migracion-v2.2.sql, que añade la
-   columna fav_order.)
+1. Esta versión NO necesita SQL nuevo.
+   (El último SQL fue el de la v2.3.11 — la columna de la foto de
+   los canales: si aún no lo ejecutaste, hazlo UNA vez en Supabase
+   → SQL Editor → New query → pega supabase-migracion-v2.3.11.sql
+   → Run. Es seguro y re-ejecutable: no borra nada ni toca tus
+   datos actuales.)
 
 2. En tu PC, descomprime este ZIP SOBRE tu carpeta local del repo
    «bookdpb» (sobrescribe los archivos).
 
 3. git add -A
-   git commit -m "BookDPB v2.3.11"
+   git commit -m "BookDPB v2.3.12"
    git push
    Vercel lo despliega solo.
 
@@ -42,6 +38,28 @@ NOTA
 «Restaurar copia completa» (Configuración → Importar datos) pide
 confirmación y avisa que aún no está disponible en la versión web.
 La copia de seguridad sí se descarga completa (JSON).
+
+NOVEDAD v2.3.12
+---------------
+- 🧩 CATEGORÍAS LADO A LADO EN SUSCRIPCIONES (Cuadrícula y Lista):
+  las categorías ya no se apilan una debajo de otra alargando la
+  página: ahora van en una REJILLA QUE ENVUELVE, una al lado de la
+  otra, como la vista Tablero o como tus Listas. Al desplegar una
+  categoría grande, las demás fluyen a su lado y por debajo. Con
+  todo plegado, las cabeceras quedan como una parrilla compacta.
+  El zoom de tarjetas también ensancha las columnas, y en
+  pantallas estrechas la rejilla se adapta sola.
+- ▸ EL TABLERO TAMBIÉN PLIEGA: las columnas de categoría del
+  Tablero llevan ahora la misma flecha (▾/▸) y el nombre clicable
+  que Cuadrícula y Lista. Plegada, la columna se queda solo con
+  su cabecera y su contador (sin la altura mínima de antes), y
+  aun así puedes soltar canales sobre ella. El estado plegado es
+  el mismo en las tres vistas y se sigue recordando entre
+  dispositivos.
+- Sin SQL nuevo y sin tocar datos: solo cambia la presentación
+  de Suscripciones. El drag & drop funciona igual en todo:
+  reordenar categorías arrastrando su cabecera, mover canales
+  entre categorías y reordenar canales dentro de su categoría.
 
 NOVEDAD v2.3.11
 ---------------

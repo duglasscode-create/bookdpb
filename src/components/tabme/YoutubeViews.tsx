@@ -754,41 +754,45 @@ export function YtSubsView() {
     body = (
       <div className="yt-board yt-board-cats">
         {sections.map(({ cat, items }) => (
-          <div key={cat ? cat.id : "none"} className="yt-col" data-cat={cat ? cat.id : ""}
+          <div key={cat ? cat.id : "none"} className={"yt-col" + (isCollapsed(cat) ? " yt-col-collapsed" : "")} data-cat={cat ? cat.id : ""}
             onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
             onDrop={dropOnCat(cat)}>
-            {catHeader(cat, items)}
-            {items.map((ch) => (
+            {catHeader(cat, items, true)}
+            {isCollapsed(cat) ? null : items.map((ch) => (
               <YtChannelCard key={ch.id} ch={ch} mini nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
             ))}
-            {!items.length ? <div className="yt-col-empty">Sin canales aquí — arrastra uno</div> : null}
+            {isCollapsed(cat) || items.length ? null : <div className="yt-col-empty">Sin canales aquí — arrastra uno</div>}
           </div>
         ))}
       </div>
     );
   } else {
-    body = sections.map(({ cat, items }) => (
-      <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
-        onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
-        onDrop={dropOnCat(cat)}>
-        {catHeader(cat, items, true)}
-        {isCollapsed(cat) ? null : items.length ? (
-          mode === "list" ? (
-            <div className="view-list zoomable" style={{ marginTop: 2 }}>
-              {items.map((ch) => (
-                <YtChannelRow key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
-              ))}
-            </div>
-          ) : (
-            <div className="yt-chgrid zoomable">
-              {items.map((ch) => (
-                <YtChannelCard key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
-              ))}
-            </div>
-          )
-        ) : <div className="yt-cat-empty">Sin canales en esta categoría — arrastra uno aquí</div>}
+    body = (
+      <div className={"yt-cat-wrap" + (mode === "list" ? " list" : "")}>
+        {sections.map(({ cat, items }) => (
+          <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
+            onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+            onDrop={dropOnCat(cat)}>
+            {catHeader(cat, items, true)}
+            {isCollapsed(cat) ? null : items.length ? (
+              mode === "list" ? (
+                <div className="view-list zoomable" style={{ marginTop: 2 }}>
+                  {items.map((ch) => (
+                    <YtChannelRow key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
+                  ))}
+                </div>
+              ) : (
+                <div className="yt-chgrid zoomable">
+                  {items.map((ch) => (
+                    <YtChannelCard key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
+                  ))}
+                </div>
+              )
+            ) : <div className="yt-cat-empty">Sin canales en esta categoría — arrastra uno aquí</div>}
+          </div>
+        ))}
       </div>
-    ));
+    );
   }
 
   return (

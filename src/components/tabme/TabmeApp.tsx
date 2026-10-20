@@ -1472,7 +1472,10 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.11</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.12</h3><ul>
+          <li>🧩 <b>Categorías lado a lado</b> en Suscripciones: en Cuadrícula y Lista ya no se apilan una debajo de otra — van en una rejilla que envuelve, como el Tablero o como tus Listas.</li>
+          <li>▸ <b>El Tablero también pliega</b>: las columnas de categoría en el Tablero tienen su flecha para plegarlas y desplegarlas, igual que en las demás vistas (y se recuerda entre dispositivos).</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.3.11</h4><ul>
           <li>📸 <b>Logos de los canales</b>: en Suscripciones cada canal enseña su foto real en círculo, como en tu extensión. Los canales que ya tenías se rellenan solos al abrir Suscripciones.</li>
           <li>▸ <b>Categorías plegables</b> en Suscripciones: clic en el nombre de una categoría (o en su flecha) para plegarla y desplegarla; lo que dejes plegado se recuerda en todos tus dispositivos.</li>
         </ul><h4 style={{ marginTop: 14 }}>v2.3.10</h4><ul>
