@@ -227,6 +227,10 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     push("notes", "Nota", "📝", db.notes, (x) => x.title);
     push("accounts", "Cuenta", "🔑", db.accounts, (x) => x.name);
     push("reminders", "Recordatorio", "⏰", db.reminders, (x) => x.title);
+    push("ytlists", "Lista de YouTube", "🎬", db.ytLists || [], (x) => x.name);
+    push("ytvideos", "Video de YouTube", "▶️", db.ytVideos || [], (x) => x.title);
+    push("ytcats", "Categoría de YouTube", "🗂️", db.ytCats || [], (x) => x.name);
+    push("ytchannels", "Canal de YouTube", "📡", db.ytChannels || [], (x) => x.name);
     return out.sort((a, b) => b.deletedAt - a.deletedAt);
   }, [db]);
 

@@ -126,6 +126,17 @@ export function ytPlaylistIdOf(input: string): string | null {
 export function ytThumb(youtubeId: string): string {
   return 'https://i.ytimg.com/vi/' + youtubeId + '/hqdefault.jpg';
 }
+/* Logo de YouTube como icono vectorial (el que pidió Duglass para el bloque):
+   botón rojo redondeado con el play blanco, nítido en claro y en oscuro. */
+export function YtLogo({ size }: { size?: number }) {
+  const s = size || 18;
+  return (
+    <svg width={s} height={s} viewBox="0 0 24 24" style={{ verticalAlign: '-3px', flex: '0 0 auto' }} aria-hidden="true">
+      <rect x="1.5" y="5" width="21" height="14" rx="4" fill="#FF0000" />
+      <path d="M10 9.3v5.4c0 .6.66.97 1.18.65l4.6-2.7a.77.77 0 0 0 0-1.3l-4.6-2.7A.77.77 0 0 0 10 9.3z" fill="#fff" />
+    </svg>
+  );
+}
 export function fmtDur(sec: number | null | undefined): string {
   const s = Math.max(0, Math.round(sec || 0));
   if (!s) return '';

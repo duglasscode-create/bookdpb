@@ -725,7 +725,8 @@ function MisItemsView() {
   );
   return (
     <>
-      <PageHead def={def} subline={keys.length + " items · Haz clic en uno para abrirlo"} toolbarKey="misitems" />
+      <PageHead def={def} subline={keys.length + " items · Haz clic en uno para abrirlo"} toolbarKey="misitems"
+        titleNode={<><img className="pg-ico-img" src="/misitems-icon.png" alt="" /><span>Mis Items</span></>} />
       <div id="cards" className="cards">{body}</div>
     </>
   );
@@ -1134,6 +1135,10 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "accounts") await tc.restoreAccount(t.id);
     else if (t.kind === "assistants") await tc.restoreAssistant(t.id);
     else if (t.kind === "reminders") await tc.restoreReminder(t.id);
+    else if (t.kind === "ytlists") await tc.restoreYtList(t.id);
+    else if (t.kind === "ytvideos") await tc.restoreYtVideo(t.id);
+    else if (t.kind === "ytcats") await tc.restoreYtCategory(t.id);
+    else if (t.kind === "ytchannels") await tc.restoreYtChannel(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1145,6 +1150,10 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "accounts") await tc.purgeAccount(t.id);
     else if (t.kind === "assistants") await tc.purgeAssistant(t.id);
     else if (t.kind === "reminders") await tc.purgeReminder(t.id);
+    else if (t.kind === "ytlists") await tc.purgeYtList(t.id);
+    else if (t.kind === "ytvideos") await tc.purgeYtVideo(t.id);
+    else if (t.kind === "ytcats") await tc.purgeYtCategory(t.id);
+    else if (t.kind === "ytchannels") await tc.purgeYtChannel(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (
@@ -1171,6 +1180,10 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "accounts") await tc.restoreAccount(t.id);
     else if (t.kind === "assistants") await tc.restoreAssistant(t.id);
     else if (t.kind === "reminders") await tc.restoreReminder(t.id);
+    else if (t.kind === "ytlists") await tc.restoreYtList(t.id);
+    else if (t.kind === "ytvideos") await tc.restoreYtVideo(t.id);
+    else if (t.kind === "ytcats") await tc.restoreYtCategory(t.id);
+    else if (t.kind === "ytchannels") await tc.restoreYtChannel(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1182,6 +1195,10 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "accounts") await tc.purgeAccount(t.id);
     else if (t.kind === "assistants") await tc.purgeAssistant(t.id);
     else if (t.kind === "reminders") await tc.purgeReminder(t.id);
+    else if (t.kind === "ytlists") await tc.purgeYtList(t.id);
+    else if (t.kind === "ytvideos") await tc.purgeYtVideo(t.id);
+    else if (t.kind === "ytcats") await tc.purgeYtCategory(t.id);
+    else if (t.kind === "ytchannels") await tc.purgeYtChannel(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (

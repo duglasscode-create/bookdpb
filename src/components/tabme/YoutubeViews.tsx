@@ -101,7 +101,7 @@ function YtCrumbs({ trail }: { trail: { label: React.ReactNode; go?: () => void 
     <>
       <button className="crumb" title="Volver a Home" onClick={goHome}>🏠 Home</button>
       <span className="crumb-sep">/</span>
-      <button className="crumb" onClick={() => goYt("ytlists")}>📺 Youtube Manager</button>
+      <button className="crumb" onClick={() => goYt("ytlists")}><T.YtLogo size={15} /> Youtube Manager</button>
       {trail.map((t, i) => (
         <React.Fragment key={i}>
           <span className="crumb-sep">/</span>
@@ -146,11 +146,12 @@ function YtListCard({ l, mini, dragRef }: { l: T.YtList; mini?: boolean; dragRef
   const del = async (e: React.MouseEvent) => {
     e.stopPropagation();
     const nSub = liveYtLists().filter((s) => s.parentId === l.id).length;
-    let msg = "¿Eliminar para siempre la lista «" + l.name + "» con sus " + st.total + " video(s)?";
-    if (nSub) msg += " También se eliminarán sus " + nSub + " sublista(s) con sus videos.";
+    let msg = "¿Enviar a la papelera la lista «" + l.name + "» con sus " + st.total + " video(s)?";
+    if (nSub) msg += " También irán sus " + nSub + " sublista(s) con sus videos.";
+    msg += " Podrás recuperarla desde MIS ITEMS → Papelera durante 30 días.";
     if (!confirm(msg)) return;
     await tc.deleteYtList(l.id);
-    tc.toast("Lista eliminada");
+    tc.toast("Lista enviada a la papelera");
   };
 
   return (
@@ -208,7 +209,7 @@ function YtListCard({ l, mini, dragRef }: { l: T.YtList; mini?: boolean; dragRef
           <span className="yt-lactions">
             <button className="icon-btn" data-act="edit" title="Editar lista"
               onClick={(e) => { e.stopPropagation(); openModal("ytlist", { id: l.id }); }}>✎</button>
-            <button className="icon-btn" data-act="del" title="Eliminar lista" onClick={del}>×</button>
+            <button className="icon-btn" data-act="del" title="Enviar lista a la papelera" onClick={del}>×</button>
           </span>
         </div>
         {subs.length && !mini ? (
@@ -247,8 +248,8 @@ function YtVideoCard({ v, dragRef }: { v: T.YtVideo; dragRef: React.RefObject<Dr
   const playing = ytPlayer && ytPlayer.videoId === v.id;
   const del = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("¿Eliminar para siempre el video «" + v.title + "» de esta lista?")) return;
-    tc.deleteYtVideo(v.id).then(() => tc.toast("Video eliminado"));
+    if (!confirm("¿Enviar a la papelera el video «" + v.title + "»? Podrás recuperarlo desde MIS ITEMS → Papelera durante 30 días.")) return;
+    tc.deleteYtVideo(v.id).then(() => tc.toast("Video enviado a la papelera"));
   };
   return (
     <div className={"card yt-vcard" + (playing ? " playing" : "")} draggable data-id={v.id}
@@ -290,7 +291,7 @@ function YtVideoCard({ v, dragRef }: { v: T.YtVideo; dragRef: React.RefObject<Dr
       <div className="yt-vbody">
         <div className="yt-vtitle" title={v.title}>{v.title}</div>
         <div className="yt-vchan">{v.channelName || "youtube.com"}
-          <button className="icon-btn yt-vdel" data-act="del" title="Eliminar video" onClick={del}>×</button>
+          <button className="icon-btn yt-vdel" data-act="del" title="Enviar video a la papelera" onClick={del}>×</button>
         </div>
       </div>
     </div>
@@ -489,11 +490,12 @@ export function YtListView() {
   const st = ytListStats(videos);
 
   const delList = async () => {
-    let msg = "¿Eliminar para siempre la lista «" + l.name + "» con sus " + videos.length + " video(s)?";
-    if (subs.length) msg += " También se eliminarán sus " + subs.length + " sublista(s) con sus videos.";
+    let msg = "¿Enviar a la papelera la lista «" + l.name + "» con sus " + videos.length + " video(s)?";
+    if (subs.length) msg += " También irán sus " + subs.length + " sublista(s) con sus videos.";
+    msg += " Podrás recuperarla desde MIS ITEMS → Papelera durante 30 días.";
     if (!confirm(msg)) return;
     await tc.deleteYtList(l.id);
-    tc.toast("Lista eliminada");
+    tc.toast("Lista enviada a la papelera");
     goYt("ytlists");
   };
 
@@ -503,7 +505,7 @@ export function YtListView() {
       <button className="btn" onClick={() => openModal("ytlist", { parentId: l.id })}>＋ Sublista</button>
       <button className="btn" onClick={() => openModal("ytlist", { id: l.id })}>✎ Editar</button>
       <button className="btn primary" onClick={() => openModal("ytvideo", { listId: l.id })}>＋ Añadir video</button>
-      <button className="btn danger" onClick={delList}>🗑 Eliminar</button>
+      <button className="btn danger" onClick={delList}>🗑 A la papelera</button>
     </>
   );
 
@@ -613,8 +615,9 @@ function YtVideoEndzone({ listId, dragRef, grid }: { listId: string; dragRef: Re
 
 export function YtSubsView() {
   const tc = useTC();
-  const { liveYtCats, liveYtChannels, liveYtVideos, openModal } = useApp();
+  const { getViewMode, liveYtCats, liveYtChannels, liveYtVideos, openModal } = useApp();
   const dragRef = useRef<DragState>(null);
+  const mode = getViewMode("ytsubs");
   const cats = liveYtCats().sort(T.byOrder);
   const channels = liveYtChannels().sort(T.byOrder);
   const videos = liveYtVideos();
@@ -625,98 +628,136 @@ export function YtSubsView() {
   const orphans = channels.filter((ch) => !ch.categoryId || !cats.find((c) => c.id === ch.categoryId));
   if (orphans.length) sections.push({ cat: null, items: orphans });
 
+  /* Soltar un canal sobre una sección/columna lo mueve a esa categoría */
+  const overCat = (e: React.DragEvent) => {
+    if (T.hasDT(e, T.DT_YTCHANNEL)) { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add("drop-target"); }
+  };
+  const dropOnCat = (cat: T.YtCategory | null) => (e: React.DragEvent) => {
+    e.preventDefault(); (e.currentTarget as HTMLElement).classList.remove("drop-target");
+    if (!T.hasDT(e, T.DT_YTCHANNEL)) return;
+    const did = e.dataTransfer.getData(T.DT_YTCHANNEL);
+    const ch = tc.db.ytChannels.find((x) => x.id === did);
+    const target = cat ? cat.id : null;
+    if (ch && (ch.categoryId || null) !== target) {
+      tc.saveYtChannel({ ...ch, categoryId: target, order: T.nextOrder(tc.db.ytChannels.filter((x) => (x.categoryId || null) === target)) })
+        .then(() => tc.toast("Canal movido a «" + (cat ? cat.name : "Sin categoría") + "»"));
+    }
+  };
+
+  const catHeader = (cat: T.YtCategory | null, items: T.YtChannel[]) => (
+    <div className="yt-cat-h" draggable={!!cat} data-cathead={cat ? cat.id : ""}
+      onDragStart={(e) => {
+        if (!cat) return;
+        if (dragRef) dragRef.current = { type: DT_YTCAT, id: cat.id };
+        e.dataTransfer.setData(DT_YTCAT, cat.id);
+        e.dataTransfer.effectAllowed = "move";
+        (e.currentTarget as HTMLElement).classList.add("dragging");
+      }}
+      onDragEnd={(e) => { (e.currentTarget as HTMLElement).classList.remove("dragging"); if (dragRef) dragRef.current = null; }}
+      onDragOver={(e) => {
+        if (!cat || !T.hasDT(e, DT_YTCAT)) return;
+        e.preventDefault(); e.stopPropagation();
+        const ds = dragRef && dragRef.current;
+        if (ds && ds.id !== cat.id) (e.currentTarget as HTMLElement).classList.add("drop-before");
+      }}
+      onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-before")}
+      onDrop={(e) => {
+        if (!cat || !T.hasDT(e, DT_YTCAT)) return;
+        e.preventDefault(); e.stopPropagation();
+        (e.currentTarget as HTMLElement).classList.remove("drop-before");
+        tc.reorderYtCategories(e.dataTransfer.getData(DT_YTCAT), cat.id);
+      }}>
+      <span className="yt-cat-grip" title="Arrastra para reordenar la categoría">⠿</span>
+      {cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🗂️</span>}
+      <span>{cat ? cat.name : "Sin categoría"}</span>
+      <span className="yt-cat-count">{items.length}</span>
+      {cat ? (
+        <span className="yt-cat-actions">
+          <button className="icon-btn" title="Editar categoría"
+            onClick={() => openModal("ytcat", { id: cat.id })}>✎</button>
+          <button className="icon-btn" title="Enviar categoría a la papelera"
+            onClick={() => {
+              if (!confirm("¿Enviar a la papelera la categoría «" + cat.name + "»? Sus canales no se borran: quedan sin categoría mientras tanto. Podrás recuperarla desde MIS ITEMS → Papelera durante 30 días.")) return;
+              tc.deleteYtCategory(cat.id).then(() => tc.toast("Categoría enviada a la papelera"));
+            }}>×</button>
+        </span>
+      ) : null}
+    </div>
+  );
+
+  let body: React.ReactNode;
+  if (!channels.length && !cats.length) {
+    body = <YtEmpty icon="📡" lines={[
+      "Todavía no tienes canales en tus suscripciones.",
+      "Añade el primero con «＋ Nuevo canal» y organízalos por categorías.",
+    ]} />;
+  } else if (mode === "board") {
+    body = (
+      <div className="yt-board yt-board-cats">
+        {sections.map(({ cat, items }) => (
+          <div key={cat ? cat.id : "none"} className="yt-col" data-cat={cat ? cat.id : ""}
+            onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+            onDrop={dropOnCat(cat)}>
+            {catHeader(cat, items)}
+            {items.map((ch) => (
+              <YtChannelCard key={ch.id} ch={ch} mini nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
+            ))}
+            {!items.length ? <div className="yt-col-empty">Sin canales aquí — arrastra uno</div> : null}
+          </div>
+        ))}
+      </div>
+    );
+  } else {
+    body = sections.map(({ cat, items }) => (
+      <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
+        onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+        onDrop={dropOnCat(cat)}>
+        {catHeader(cat, items)}
+        {items.length ? (
+          mode === "list" ? (
+            <div className="view-list zoomable" style={{ marginTop: 2 }}>
+              {items.map((ch) => (
+                <YtChannelRow key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
+              ))}
+            </div>
+          ) : (
+            <div className="yt-chgrid zoomable">
+              {items.map((ch) => (
+                <YtChannelCard key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
+              ))}
+            </div>
+          )
+        ) : <div className="yt-cat-empty">Sin canales en esta categoría — arrastra uno aquí</div>}
+      </div>
+    ));
+  }
+
   return (
     <>
-      <YtHead vkey="ytsubs" hideModes
+      <YtHead vkey="ytsubs"
         titleNode={<YtCrumbs trail={[{ label: <>📡 Suscripciones</> }]} />}
         subline={channels.length + " canal(es) en " + cats.length + " categoría(s) · Arrastra un canal a otra categoría para moverlo"}
         primary={<>
           <button className="btn" onClick={() => openModal("ytcat", {})}>＋ Nueva categoría</button>
           <button className="btn primary" onClick={() => openModal("ytchannel", {})}>＋ Nuevo canal</button>
         </>} />
-      {!channels.length && !cats.length ? (
-        <YtEmpty icon="📡" lines={[
-          "Todavía no tienes canales en tus suscripciones.",
-          "Añade el primero con «＋ Nuevo canal» y organízalos por categorías.",
-        ]} />
-      ) : sections.map(({ cat, items }) => (
-        <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
-          onDragOver={(e) => { if (T.hasDT(e, T.DT_YTCHANNEL)) { e.preventDefault(); e.currentTarget.classList.add("drop-target"); } }}
-          onDragLeave={(e) => e.currentTarget.classList.remove("drop-target")}
-          onDrop={(e) => {
-            e.preventDefault(); e.currentTarget.classList.remove("drop-target");
-            if (!T.hasDT(e, T.DT_YTCHANNEL)) return;
-            const did = e.dataTransfer.getData(T.DT_YTCHANNEL);
-            const ch = tc.db.ytChannels.find((x) => x.id === did);
-            const target = cat ? cat.id : null;
-            if (ch && (ch.categoryId || null) !== target) {
-              tc.saveYtChannel({ ...ch, categoryId: target, order: T.nextOrder(tc.db.ytChannels.filter((x) => (x.categoryId || null) === target)) })
-                .then(() => tc.toast("Canal movido a «" + (cat ? cat.name : "Sin categoría") + "»"));
-            }
-          }}>
-          <div className="yt-cat-h" draggable={!!cat} data-cathead={cat ? cat.id : ""}
-            onDragStart={(e) => {
-              if (!cat) return;
-              if (dragRef) dragRef.current = { type: DT_YTCAT, id: cat.id };
-              e.dataTransfer.setData(DT_YTCAT, cat.id);
-              e.dataTransfer.effectAllowed = "move";
-              (e.currentTarget as HTMLElement).classList.add("dragging");
-            }}
-            onDragEnd={(e) => { (e.currentTarget as HTMLElement).classList.remove("dragging"); if (dragRef) dragRef.current = null; }}
-            onDragOver={(e) => {
-              if (!cat || !T.hasDT(e, DT_YTCAT)) return;
-              e.preventDefault(); e.stopPropagation();
-              const ds = dragRef && dragRef.current;
-              if (ds && ds.id !== cat.id) (e.currentTarget as HTMLElement).classList.add("drop-before");
-            }}
-            onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-before")}
-            onDrop={(e) => {
-              if (!cat || !T.hasDT(e, DT_YTCAT)) return;
-              e.preventDefault(); e.stopPropagation();
-              (e.currentTarget as HTMLElement).classList.remove("drop-before");
-              tc.reorderYtCategories(e.dataTransfer.getData(DT_YTCAT), cat.id);
-            }}>
-            <span className="yt-cat-grip" title="Arrastra para reordenar la categoría">⠿</span>
-            {cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🗂️</span>}
-            <span>{cat ? cat.name : "Sin categoría"}</span>
-            <span className="yt-cat-count">{items.length}</span>
-            {cat ? (
-              <span className="yt-cat-actions">
-                <button className="icon-btn" title="Editar categoría"
-                  onClick={() => openModal("ytcat", { id: cat.id })}>✎</button>
-                <button className="icon-btn" title="Eliminar categoría"
-                  onClick={() => {
-                    if (!confirm("¿Eliminar la categoría «" + cat.name + "»? Sus canales no se borran: quedan sin categoría.")) return;
-                    tc.deleteYtCategory(cat.id).then(() => tc.toast("Categoría eliminada"));
-                  }}>×</button>
-              </span>
-            ) : null}
-          </div>
-          {items.length ? (
-            <div className="yt-chgrid">
-              {items.map((ch) => (
-                <YtChannelCard key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />
-              ))}
-            </div>
-          ) : <div className="yt-cat-empty">Sin canales en esta categoría — arrastra uno aquí</div>}
-        </div>
-      ))}
+      {body}
     </>
   );
 }
 
-function YtChannelCard({ ch, nVideos, dragRef }: { ch: T.YtChannel; nVideos: number; dragRef: React.RefObject<DragState> }) {
+function YtChannelCard({ ch, nVideos, dragRef, mini }: { ch: T.YtChannel; nVideos: number; dragRef: React.RefObject<DragState>; mini?: boolean }) {
   const tc = useTC();
   const { openModal } = useApp();
   const { clearDropMarks } = useDnD();
   const fav = ch.url ? T.faviconFor(ch.url) : "";
   const del = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("¿Eliminar para siempre el canal «" + ch.name + "» de tus suscripciones?")) return;
-    tc.deleteYtChannel(ch.id).then(() => tc.toast("Canal eliminado"));
+    if (!confirm("¿Enviar a la papelera el canal «" + ch.name + "»? Podrás recuperarlo desde MIS ITEMS → Papelera durante 30 días.")) return;
+    tc.deleteYtChannel(ch.id).then(() => tc.toast("Canal enviado a la papelera"));
   };
   return (
-    <div className="yt-chcard" draggable data-id={ch.id} title="Arrastra para reordenar o cambiar de categoría"
+    <div className={"yt-chcard" + (mini ? " yt-mini" : "")} draggable data-id={ch.id} title="Arrastra para reordenar o cambiar de categoría"
       onClick={(e) => { if ((e.target as HTMLElement).closest("[data-act]")) return; if (ch.url) tc.openUrl(ch.url); }}
       onDragStart={(e) => {
         if (dragRef) dragRef.current = { type: T.DT_YTCHANNEL, id: ch.id };
@@ -756,7 +797,66 @@ function YtChannelCard({ ch, nVideos, dragRef }: { ch: T.YtChannel; nVideos: num
       <span className="yt-chactions">
         <button className="icon-btn" data-act="edit" title="Editar canal"
           onClick={(e) => { e.stopPropagation(); openModal("ytchannel", { id: ch.id }); }}>✎</button>
-        <button className="icon-btn" data-act="del" title="Eliminar canal" onClick={del}>×</button>
+        <button className="icon-btn" data-act="del" title="Enviar canal a la papelera" onClick={del}>×</button>
+      </span>
+    </div>
+  );
+}
+
+/* Fila de canal para el modo Lista de Suscripciones (mismo drag & drop
+   que la tarjeta: reordenar dentro de la categoría o mover a otra). */
+function YtChannelRow({ ch, nVideos, dragRef }: { ch: T.YtChannel; nVideos: number; dragRef: React.RefObject<DragState> }) {
+  const tc = useTC();
+  const { openModal } = useApp();
+  const { clearDropMarks } = useDnD();
+  const fav = ch.url ? T.faviconFor(ch.url) : "";
+  const del = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("¿Enviar a la papelera el canal «" + ch.name + "»? Podrás recuperarlo desde MIS ITEMS → Papelera durante 30 días.")) return;
+    tc.deleteYtChannel(ch.id).then(() => tc.toast("Canal enviado a la papelera"));
+  };
+  return (
+    <div className="vrow" draggable data-id={ch.id} title="Arrastra para reordenar o cambiar de categoría"
+      onClick={(e) => { if ((e.target as HTMLElement).closest("[data-act]")) return; if (ch.url) tc.openUrl(ch.url); }}
+      onDragStart={(e) => {
+        if (dragRef) dragRef.current = { type: T.DT_YTCHANNEL, id: ch.id };
+        e.dataTransfer.setData(T.DT_YTCHANNEL, ch.id);
+        e.dataTransfer.effectAllowed = "move";
+        e.currentTarget.classList.add("dragging");
+      }}
+      onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); if (dragRef) dragRef.current = null; }}
+      onDragOver={(e) => {
+        if (!T.hasDT(e, T.DT_YTCHANNEL)) return;
+        e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = "move";
+        const ds = dragRef && dragRef.current;
+        if (ds && ds.id !== ch.id) e.currentTarget.classList.add("drop-before");
+      }}
+      onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
+      onDrop={(e) => {
+        if (!T.hasDT(e, T.DT_YTCHANNEL)) return;
+        e.preventDefault(); e.stopPropagation();
+        e.currentTarget.classList.remove("drop-before");
+        const did = e.dataTransfer.getData(T.DT_YTCHANNEL);
+        const dc = tc.db.ytChannels.find((x) => x.id === did);
+        if (!dc || dc.id === ch.id) return;
+        if ((dc.categoryId || null) !== (ch.categoryId || null)) {
+          tc.saveYtChannel({ ...dc, categoryId: ch.categoryId || null }).then(() =>
+            tc.reorderYtChannels(ch.categoryId || null, did, ch.id));
+        } else {
+          tc.reorderYtChannels(ch.categoryId || null, did, ch.id);
+        }
+      }}>
+      <span className="yt-avatar" style={{ background: "var(--card-2)", width: 30, height: 30, fontSize: 13 }}>
+        {fav ? <img src={fav} alt="" style={{ width: 18, height: 18 }} /> : (ch.name || "?").charAt(0).toUpperCase()}
+      </span>
+      <div className="vrow-body">
+        <div className="vrow-title">{ch.name}</div>
+        <div className="vrow-sub">{ch.handle || (ch.url ? T.domainOf(ch.url) : "")} · {nVideos} video(s) en tus listas</div>
+      </div>
+      <span className="vrow-actions">
+        <button className="icon-btn" data-act="edit" title="Editar canal"
+          onClick={(e) => { e.stopPropagation(); openModal("ytchannel", { id: ch.id }); }}>✎</button>
+        <button className="icon-btn" data-act="del" title="Enviar canal a la papelera" onClick={del}>×</button>
       </span>
     </div>
   );
@@ -765,22 +865,54 @@ function YtChannelCard({ ch, nVideos, dragRef }: { ch: T.YtChannel; nVideos: num
 /* ---------- Vista: Completadas ---------- */
 
 export function YtDoneView() {
-  const { liveYtLists, liveYtVideos } = useApp();
+  const { getViewMode, liveYtLists, liveYtVideos } = useApp();
   const dragRef = useRef<DragState>(null);
+  const mode = getViewMode("ytdone");
   const allVideos = liveYtVideos();
   const done = liveYtLists().filter((l) => ytListDone(l, allVideos)).sort(T.byOrder);
+
+  let body: React.ReactNode;
+  if (!done.length) {
+    body = <YtEmpty icon="🏁" lines={["Todavía no has completado ninguna lista."]} />;
+  } else if (mode === "list") {
+    body = (
+      <div className="view-list zoomable">
+        {done.map((l) => {
+          const st = ytListStats(allVideos.filter((v) => v.listId === l.id));
+          return <YtListRow key={l.id} l={l} st={st} dragRef={dragRef} />;
+        })}
+      </div>
+    );
+  } else if (mode === "board") {
+    const cols: { key: string; label: string; items: T.YtList[] }[] = [
+      { key: "top", label: "🎬 Listas", items: done.filter((l) => !l.parentId) },
+      { key: "sub", label: "📂 Sublistas", items: done.filter((l) => !!l.parentId) },
+    ].filter((c) => c.items.length);
+    body = (
+      <div className={"yt-board" + (cols.length === 2 ? " c2" : cols.length === 1 ? " c1" : "")}>
+        {cols.map((c) => (
+          <div key={c.key} className="yt-col">
+            <h4>{c.label}<span>{c.items.length}</span></h4>
+            {c.items.map((l) => <YtListCard key={l.id} l={l} mini dragRef={dragRef} />)}
+          </div>
+        ))}
+      </div>
+    );
+  } else {
+    body = (
+      <div id="cards" className="cards zoomable">
+        {done.map((l) => <YtListCard key={l.id} l={l} dragRef={dragRef} />)}
+      </div>
+    );
+  }
+
   return (
     <>
-      <YtHead vkey="ytdone" hideModes
+      <YtHead vkey="ytdone"
         titleNode={<YtCrumbs trail={[{ label: <>🏁 Completadas</> }]} />}
-        subline="Listas con todos los videos vistos · Se mueven aquí solas al terminar la lista" />
-      {done.length ? (
-        <div id="cards" className="cards zoomable">
-          {done.map((l) => <YtListCard key={l.id} l={l} dragRef={dragRef} />)}
-        </div>
-      ) : (
-        <YtEmpty icon="🏁" lines={["Todavía no has completado ninguna lista."]} />
-      )}
+        subline={done.length + " lista(s) completada(s) · Se mueven aquí solas al terminar la lista"} />
+      {body}
     </>
   );
 }
+

@@ -99,10 +99,14 @@ type Ctx = {
   createYtList: (input: Partial<T.YtList>) => Promise<T.YtList>;
   saveYtList: (l: T.YtList) => Promise<void>;
   deleteYtList: (id: string) => Promise<void>;
+  restoreYtList: (id: string) => Promise<void>;
+  purgeYtList: (id: string) => Promise<void>;
   reorderYtLists: (parentId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
   createYtVideo: (input: Partial<T.YtVideo> & { listId: string; youtubeId: string }) => Promise<T.YtVideo>;
   saveYtVideo: (v: T.YtVideo) => Promise<void>;
   deleteYtVideo: (id: string) => Promise<void>;
+  restoreYtVideo: (id: string) => Promise<void>;
+  purgeYtVideo: (id: string) => Promise<void>;
   moveYtVideoToList: (videoId: string, listId: string) => Promise<void>;
   reorderYtVideos: (listId: string, dragId: string, beforeId: string | null) => Promise<void>;
   setYtWatched: (youtubeId: string, watched: boolean) => Promise<void>;
@@ -111,10 +115,14 @@ type Ctx = {
   createYtCategory: (input: Partial<T.YtCategory>) => Promise<T.YtCategory>;
   saveYtCategory: (c: T.YtCategory) => Promise<void>;
   deleteYtCategory: (id: string) => Promise<void>;
+  restoreYtCategory: (id: string) => Promise<void>;
+  purgeYtCategory: (id: string) => Promise<void>;
   reorderYtCategories: (dragId: string, beforeId: string | null) => Promise<void>;
   createYtChannel: (input: Partial<T.YtChannel>) => Promise<T.YtChannel>;
   saveYtChannel: (c: T.YtChannel) => Promise<void>;
   deleteYtChannel: (id: string) => Promise<void>;
+  restoreYtChannel: (id: string) => Promise<void>;
+  purgeYtChannel: (id: string) => Promise<void>;
   reorderYtChannels: (categoryId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
   /* activity + trash */
   logActivity: (type: string, text: string, detail?: string) => Promise<void>;
@@ -987,7 +995,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase]);
 
   const emptyTrash = useCallback(async () => {
-    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[] };
+    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[], ytLists: [] as string[], ytVideos: [] as string[], ytChannels: [] as string[], ytCats: [] as string[] };
     setDb((d) => {
       d.spaces.forEach((s) => { if (s.deletedAt) st.spaces.push(s.id); });
       d.folders.forEach((f) => { if (f.deletedAt) st.folders.push(f.id); });
@@ -996,6 +1004,13 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       d.accounts.forEach((a) => { if (a.deletedAt) st.accounts.push(a.id); });
       d.assistants.forEach((a) => { if (a.deletedAt) st.assistants.push(a.id); });
       d.reminders.forEach((r) => { if (r.deletedAt) st.reminders.push(r.id); });
+      d.ytLists.forEach((l) => { if (l.deletedAt) st.ytLists.push(l.id); });
+      d.ytVideos.forEach((v) => { if (v.deletedAt) st.ytVideos.push(v.id); });
+      /* los videos de una lista purgada se purgan con ella, aunque el
+         video en sí no estuviera marcado en la papelera */
+      d.ytVideos.forEach((v) => { if (st.ytLists.includes(v.listId) && !st.ytVideos.includes(v.id)) st.ytVideos.push(v.id); });
+      d.ytChannels.forEach((c) => { if (c.deletedAt) st.ytChannels.push(c.id); });
+      d.ytCats.forEach((c) => { if (c.deletedAt) st.ytCats.push(c.id); });
       return {
         ...d,
         spaces: d.spaces.filter((s) => !s.deletedAt),
@@ -1005,6 +1020,10 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         accounts: d.accounts.filter((a) => !a.deletedAt),
         assistants: d.assistants.filter((a) => !a.deletedAt),
         reminders: d.reminders.filter((r) => !r.deletedAt),
+        ytLists: d.ytLists.filter((l) => !l.deletedAt),
+        ytVideos: d.ytVideos.filter((v) => !st.ytVideos.includes(v.id)),
+        ytChannels: d.ytChannels.filter((c) => !c.deletedAt),
+        ytCats: d.ytCats.filter((c) => !c.deletedAt),
       };
     });
     if (st.bookmarks.length) {
@@ -1018,6 +1037,10 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     if (st.accounts.length) await supabase.from("accounts").delete().in("id", st.accounts);
     if (st.assistants.length) await supabase.from("assistants").delete().in("id", st.assistants);
     if (st.reminders.length) await supabase.from("reminders").delete().in("id", st.reminders);
+    if (st.ytVideos.length) await supabase.from("yt_videos").delete().in("id", st.ytVideos);
+    if (st.ytLists.length) await supabase.from("yt_lists").delete().in("id", st.ytLists);
+    if (st.ytChannels.length) await supabase.from("yt_channels").delete().in("id", st.ytChannels);
+    if (st.ytCats.length) await supabase.from("yt_categories").delete().in("id", st.ytCats);
   }, [supabase]);
 
   /* ----- notas: mover al final ----- */
@@ -1317,11 +1340,12 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     await supabase.from("yt_lists").update(ytListRow(l)).eq("id", l.id);
   }, [supabase, userId]);
 
-  const deleteYtList = useCallback(async (id: string) => {
-    /* Borrado definitivo (la UI pide confirmación antes): la lista, sus
-       sublistas en cascada y todos sus videos. */
+  /* Borrar = enviar a la papelera global de BookDPB (v2.3.9): la lista,
+     sus sublistas en cascada y todos sus videos quedan con deletedAt y
+     se recuperan desde MIS ITEMS → Papelera (purga a los 30 días). */
+  const ytTreeIds = (rootId: string): string[] => {
     const cur = getDb();
-    const ids: string[] = [id];
+    const ids: string[] = [rootId];
     let grew = true;
     while (grew) {
       grew = false;
@@ -1329,6 +1353,41 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         if (l.parentId && ids.includes(l.parentId) && !ids.includes(l.id)) { ids.push(l.id); grew = true; }
       });
     }
+    return ids;
+  };
+
+  const deleteYtList = useCallback(async (id: string) => {
+    const now = Date.now();
+    const ids = ytTreeIds(id);
+    const idSet = new Set(ids);
+    setDb((d) => ({
+      ...d,
+      ytLists: d.ytLists.map((l) => (idSet.has(l.id) ? { ...l, deletedAt: now } : l)),
+      ytVideos: d.ytVideos.map((v) => (idSet.has(v.listId) ? { ...v, deletedAt: now } : v)),
+    }));
+    await supabase.from("yt_lists").update({ is_deleted: true, deleted_at: new Date(now).toISOString() })
+      .eq("user_id", userId).in("id", ids);
+    const vids = getDb().ytVideos.filter((v) => ids.includes(v.listId)).map((v) => v.id);
+    if (vids.length) await supabase.from("yt_videos").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).in("id", vids);
+  }, [supabase, userId, setDb, getDb]);
+
+  const restoreYtList = useCallback(async (id: string) => {
+    const ids = ytTreeIds(id);
+    const idSet = new Set(ids);
+    setDb((d) => ({
+      ...d,
+      ytLists: d.ytLists.map((l) => (idSet.has(l.id) ? { ...l, deletedAt: null } : l)),
+      ytVideos: d.ytVideos.map((v) => (idSet.has(v.listId) ? { ...v, deletedAt: null } : v)),
+    }));
+    await supabase.from("yt_lists").update({ is_deleted: false, deleted_at: null })
+      .eq("user_id", userId).in("id", ids);
+    const vids = getDb().ytVideos.filter((v) => ids.includes(v.listId)).map((v) => v.id);
+    if (vids.length) await supabase.from("yt_videos").update({ is_deleted: false, deleted_at: null }).in("id", vids);
+  }, [supabase, userId, setDb, getDb]);
+
+  const purgeYtList = useCallback(async (id: string) => {
+    const cur = getDb();
+    const ids = ytTreeIds(id);
     const vids = cur.ytVideos.filter((v) => ids.includes(v.listId)).map((v) => v.id);
     setDb((d) => ({
       ...d,
@@ -1378,6 +1437,17 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase, userId]);
 
   const deleteYtVideo = useCallback(async (id: string) => {
+    const now = Date.now();
+    setDb((d) => ({ ...d, ytVideos: d.ytVideos.map((v) => (v.id === id ? { ...v, deletedAt: now } : v)) }));
+    await supabase.from("yt_videos").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreYtVideo = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytVideos: d.ytVideos.map((v) => (v.id === id ? { ...v, deletedAt: null } : v)) }));
+    await supabase.from("yt_videos").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeYtVideo = useCallback(async (id: string) => {
     setDb((d) => ({ ...d, ytVideos: d.ytVideos.filter((v) => v.id !== id) }));
     await supabase.from("yt_videos").delete().eq("id", id);
   }, [supabase]);
@@ -1484,7 +1554,20 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase, userId]);
 
   const deleteYtCategory = useCallback(async (id: string) => {
-    /* Los canales de la categoría quedan «sin categoría», no se borran. */
+    /* A la papelera: los canales conservan su category_id, así que al
+       restaurar la categoría vuelven a aparecer dentro de ella. Mientras
+       tanto se ven en «Sin categoría» (la categoría no está viva). */
+    const now = Date.now();
+    setDb((d) => ({ ...d, ytCats: d.ytCats.map((c) => (c.id === id ? { ...c, deletedAt: now } : c)) }));
+    await supabase.from("yt_categories").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreYtCategory = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytCats: d.ytCats.map((c) => (c.id === id ? { ...c, deletedAt: null } : c)) }));
+    await supabase.from("yt_categories").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeYtCategory = useCallback(async (id: string) => {
     setDb((d) => ({
       ...d,
       ytCats: d.ytCats.filter((c) => c.id !== id),
@@ -1530,6 +1613,17 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase, userId]);
 
   const deleteYtChannel = useCallback(async (id: string) => {
+    const now = Date.now();
+    setDb((d) => ({ ...d, ytChannels: d.ytChannels.map((c) => (c.id === id ? { ...c, deletedAt: now } : c)) }));
+    await supabase.from("yt_channels").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreYtChannel = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytChannels: d.ytChannels.map((c) => (c.id === id ? { ...c, deletedAt: null } : c)) }));
+    await supabase.from("yt_channels").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeYtChannel = useCallback(async (id: string) => {
     setDb((d) => ({ ...d, ytChannels: d.ytChannels.filter((c) => c.id !== id) }));
     await supabase.from("yt_channels").delete().eq("id", id);
   }, [supabase]);
@@ -1564,11 +1658,11 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     toggleAssistantFavorite,
     saveReminder, createReminder, trashReminder, restoreReminder, purgeReminder, reorderReminders,
     toggleReminderDone,
-    createYtList, saveYtList, deleteYtList, reorderYtLists,
-    createYtVideo, saveYtVideo, deleteYtVideo, moveYtVideoToList, reorderYtVideos,
+    createYtList, saveYtList, deleteYtList, restoreYtList, purgeYtList, reorderYtLists,
+    createYtVideo, saveYtVideo, deleteYtVideo, restoreYtVideo, purgeYtVideo, moveYtVideoToList, reorderYtVideos,
     setYtWatched, addYtProgress, importYtVideos,
-    createYtCategory, saveYtCategory, deleteYtCategory, reorderYtCategories,
-    createYtChannel, saveYtChannel, deleteYtChannel, reorderYtChannels,
+    createYtCategory, saveYtCategory, deleteYtCategory, restoreYtCategory, purgeYtCategory, reorderYtCategories,
+    createYtChannel, saveYtChannel, deleteYtChannel, restoreYtChannel, purgeYtChannel, reorderYtChannels,
     logActivity, clearActivity, emptyTrash, updateSettings,
   };
 

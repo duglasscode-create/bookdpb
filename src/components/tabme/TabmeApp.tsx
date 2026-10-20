@@ -379,14 +379,22 @@ function YtPlayerBar() {
         <div className="yt-bar-center">
           <div className="yt-bar-btns">
             <button className={"yt-ibtn" + (shuffle ? " on" : "")} title="Aleatorio"
-              onClick={() => setShuffle(!shuffle)}>🔀</button>
-            <button className="yt-ibtn" title="Anterior" onClick={() => step(-1)}>⏮</button>
+              onClick={() => setShuffle(!shuffle)}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" /><line x1="4" y1="4" x2="9" y2="9" /></svg>
+            </button>
+            <button className="yt-ibtn" title="Anterior" onClick={() => step(-1)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2.5v14H6zM19.5 5v14L10 12z" /></svg>
+            </button>
             <button className="yt-ibtn main" title={playing ? "Pausa" : "Reproducir"}
               onClick={() => {
                 const p = playerRef.current; if (!p) return;
                 if (playing) p.pauseVideo(); else p.playVideo();
-              }}>{playing ? "⏸" : "▶"}</button>
-            <button className="yt-ibtn" title="Siguiente" onClick={() => step(1)}>⏭</button>
+              }}>{playing
+                ? <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 5h3.8v14H6.5zM13.7 5h3.8v14h-3.8z" /></svg>
+                : <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l10-6.86a1.03 1.03 0 0 0 0-1.76l-10-6.86A1.03 1.03 0 0 0 8 5.14z" /></svg>}</button>
+            <button className="yt-ibtn" title="Siguiente" onClick={() => step(1)}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 5H18v14h-2.5zM4.5 5v14L14 12z" /></svg>
+            </button>
           </div>
           <div className="yt-track">
             <span>{T.fmtDur(pos)}</span>
@@ -1185,7 +1193,8 @@ function YoutubeSec() {
             }}>
             <span className="chev">{expanded ? "▾" : "▸"}</span>
             <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
-            <span className="side-name">📺 YOUTUBE MANAGER</span>
+            <span className="sec-ico" style={{ display: "inline-flex" }}><T.YtLogo size={17} /></span>
+            <span className="side-name">YOUTUBE MANAGER</span>
             <span className="icon-btn item-add" data-act="add" title="Nueva lista">＋</span>
           </div>
           {expanded && (
@@ -1283,7 +1292,8 @@ function MisItemsSec() {
             }}>
             <span className="chev">{expanded ? "▾" : "▸"}</span>
             <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
-            <span className="side-name">🗂 MIS ITEMS</span>
+            <img className="sec-ico" src="/misitems-icon.png" alt="" />
+            <span className="side-name">MIS ITEMS</span>
             <span className="icon-btn item-add" data-act="add" title="Nuevo item">＋</span>
           </div>
           {expanded && (
@@ -1420,7 +1430,7 @@ function HelpModals() {
             <li>Añade <b>etiquetas</b> al editar un marcador y fíltralas desde la barra lateral; cada etiqueta tiene su <b>color</b> (cámbialo en ⚙️ → «Editar etiquetas»).</li>
             <li>La barra lateral se <b>colapsa sola</b> y se abre al pasar el ratón; fíjala con 📌.</li></ul>
           <h4>Mis items</h4>
-          <p>La sección <b>🗂 MIS ITEMS</b> de la barra lateral agrupa: <b>🔑 Cuentas</b> (nombre, URL, usuario, email, contraseña y logo automático del dominio), <b>⏰ Recordatorios</b> (te avisan con notificación aunque el panel esté cerrado, con color e icono propios), <b>⭐ Favoritos</b>, <b>🕘 Historial</b>, <b>🗑 Papelera</b> y <b>🔖 Haciendo</b>. Todo se puede reordenar arrastrando.</p>
+          <p>La sección <b>MIS ITEMS</b> de la barra lateral agrupa: <b>🔑 Cuentas</b> (nombre, URL, usuario, email, contraseña y logo automático del dominio), <b>⏰ Recordatorios</b> (te avisan con notificación aunque el panel esté cerrado, con color e icono propios), <b>⭐ Favoritos</b>, <b>🕘 Historial</b>, <b>🗑 Papelera</b> y <b>🔖 Haciendo</b>. Todo se puede reordenar arrastrando.</p>
           <h4>Papelera</h4>
           <p>Todo lo que elimines va a la <b>🗑 Papelera</b>: puedes restaurarlo, eliminarlo para siempre o vaciarla. Los elementos se purgan solos a los <b>30 días</b>.</p>
           <h4>Notas</h4>
@@ -1462,7 +1472,12 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.8</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.9</h3><ul>
+          <li>▶️ <b>Botón de reproducir/pausar arreglado</b>: ya no sale deformado en la barra del reproductor; todos los botones de transporte son ahora iconos nítidos.</li>
+          <li>👁 <b>Suscripciones y Completadas con vistas</b>: Cuadrícula, Lista y Tablero con zoom, igual que Listas. En el tablero de Suscripciones cada columna es una categoría: arrastra un canal de columna para moverlo.</li>
+          <li>🗑 <b>Papelera para Youtube Manager</b>: borrar una lista, un video, un canal o una categoría ya no es para siempre — va a la papelera de MIS ITEMS y lo puedes recuperar durante 30 días.</li>
+          <li>🔴 <b>Iconos nuevos, a tu gusto</b>: el bloque lleva el logo de YouTube y MIS ITEMS tu libreta azul.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.3.8</h4><ul>
           <li>📺 <b>Youtube Manager</b>: bloque nuevo en la barra lateral con tus listas y sublistas de YouTube (icono, imagen y color como en los spaces), reproductor integrado, suscripciones por categorías, listas completadas y drag & drop en todo.</li>
           <li>✓ <b>Marcar y desmarcar vistos</b> con un clic en el círculo de cada video; al terminar un video se marca solo, y el visto se sincroniza entre tus listas.</li>
           <li>🗂 <b>Arreglo</b>: los marcadores de una subcarpeta ya no aparecen en la carpeta raíz; cada marcador sale solo donde lo guardas.</li>
