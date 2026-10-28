@@ -46,6 +46,7 @@ export default async function proxy(request: NextRequest) {
   const isPublicPath =
     path === "/login" ||
     path.startsWith("/auth") ||
+    path === "/player.html" ||
     path === "/";
 
   // Si NO hay usuario y la ruta NO es pública, ir al login
