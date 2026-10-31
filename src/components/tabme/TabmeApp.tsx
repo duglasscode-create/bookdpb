@@ -25,9 +25,10 @@ let downEl: HTMLElement | null = null;
 
 const SEC_DEFAULT = ["spaces", "misitems", "youtube", "tags", "sessions"];
 const ITEM_KEYS = ["accounts", "reminders", "favorites", "history", "trash", "readlater"];
-const YT_KEYS = ["ytlists", "ytsubs", "ytdone"];
+const YT_KEYS = ["ytlists", "ytloose", "ytsubs", "ytdone"];
 const YT_DEFS: Record<string, { label: string; icon: string; hint: string }> = {
-  ytlists: { label: "Listas", icon: "🎬", hint: "Tus listas de videos de YouTube" },
+  ytlists: { label: "Listas", icon: "🎬", hint: "Tus listas de videos de YouTube, agrupadas por categorías" },
+  ytloose: { label: "Vídeos sueltos", icon: "🎞️", hint: "Videos que no pertenecen a ninguna lista, en sus categorías" },
   ytsubs: { label: "Suscripciones", icon: "📡", hint: "Tus canales de YouTube, por categorías" },
   ytdone: { label: "Completadas", icon: "🏁", hint: "Listas con todos los videos vistos" },
 };
@@ -173,11 +174,29 @@ declare global {
 
 function YtPlayerBar() {
   const tc = useTC();
-  const { ytPlayer, stopYt, playYt } = useApp();
+  const { ytPlayer, stopYt, playYt, playLoose } = useApp();
   const yp = ytPlayer!;
-  const cur = tc.db.ytVideos.find((v) => v.id === yp.videoId);
-  const list = tc.db.ytLists.find((l) => l.id === yp.listId);
-  const queue = (list ? tc.db.ytVideos.filter((v) => v.listId === list.id && !v.deletedAt) : [])
+  /* v2.4.0: el reproductor también suena para vídeos sueltos; en ese
+     modo yp.listId guarda la categoría del vídeo (o "" = Sin clasificar)
+     y la cola es los vídeos de esa categoría. */
+  const looseMode = !!yp.loose;
+  const looseCatKey = yp.listId || null;
+  const curLooseRaw = looseMode ? (tc.db.ytLooseVideos || []).find((v) => v.id === yp.videoId) : undefined;
+  const asVideo = (v: T.YtLooseVideo): T.YtVideo => ({
+    id: v.id, listId: v.catId || "", youtubeId: v.youtubeId, title: v.title,
+    channelName: v.channelName, thumbnail: v.thumbnail, durationSec: v.durationSec,
+    watched: v.watched, progressSec: v.progressSec, secondsWatched: v.secondsWatched,
+    noEmbed: v.noEmbed, order: v.order, deletedAt: v.deletedAt,
+  });
+  const cur = looseMode
+    ? (curLooseRaw ? asVideo(curLooseRaw) : undefined)
+    : tc.db.ytVideos.find((v) => v.id === yp.videoId);
+  const list = looseMode ? undefined : tc.db.ytLists.find((l) => l.id === yp.listId);
+  const looseCat = looseMode ? (tc.db.ytVidCats || []).find((c) => c.id === looseCatKey) : undefined;
+  const groupName = looseMode ? (looseCat ? looseCat.name : "Vídeos sueltos") : (list ? list.name : "");
+  const queue = (looseMode
+    ? (tc.db.ytLooseVideos || []).filter((v) => (v.catId || null) === looseCatKey && !v.deletedAt).map(asVideo)
+    : (list ? tc.db.ytVideos.filter((v) => v.listId === list.id && !v.deletedAt) : []))
     .slice().sort(T.byOrder);
 
   const hostRef = useRef<HTMLDivElement>(null);
@@ -196,6 +215,8 @@ function YtPlayerBar() {
   curRef.current = cur;
   const queueRef = useRef(queue);
   queueRef.current = queue;
+  const looseModeRef = useRef(looseMode);
+  looseModeRef.current = looseMode;
   const shuffleRef = useRef(shuffle);
   shuffleRef.current = shuffle;
 
@@ -220,9 +241,10 @@ function YtPlayerBar() {
       : i + dir;
     if (n === i && q.length > 1) n = (i + 1) % q.length;
     if (n < 0 || n >= q.length) return false;
-    playYt(v.listId, q[n].id);
+    if (looseModeRef.current) playLoose(v.listId || null, q[n].id);
+    else playYt(v.listId, q[n].id);
     return true;
-  }, [playYt]);
+  }, [playYt, playLoose]);
 
   const stepRef = useRef(step);
   stepRef.current = step;
@@ -272,7 +294,12 @@ function YtPlayerBar() {
           if ([100, 101, 150, 153].includes(e.data)) {
             const v = curRef.current;
             if (v && !v.noEmbed) {
-              tc.saveYtVideo({ ...v, noEmbed: true });
+              if (looseModeRef.current) {
+                const raw = (tc.db.ytLooseVideos || []).find((x) => x.id === v.id);
+                if (raw) tc.saveYtLooseVideo({ ...raw, noEmbed: true });
+              } else {
+                tc.saveYtVideo({ ...v, noEmbed: true });
+              }
               tc.toast("Este video no permite inserción (⛔). Ábrelo en YouTube.");
             }
           }
@@ -300,7 +327,12 @@ function YtPlayerBar() {
         if (accRef.current >= 5) flushRef.current(now);
         if (d > 0 && !v.durationSec && durSavedRef.current !== v.id) {
           durSavedRef.current = v.id;
-          tc.saveYtVideo({ ...v, durationSec: Math.round(d) });
+          if (looseModeRef.current) {
+            const raw = (tc.db.ytLooseVideos || []).find((x) => x.id === v.id);
+            if (raw) tc.saveYtLooseVideo({ ...raw, durationSec: Math.round(d) });
+          } else {
+            tc.saveYtVideo({ ...v, durationSec: Math.round(d) });
+          }
         }
       }
       lastPosRef.current = now;
@@ -334,8 +366,8 @@ function YtPlayerBar() {
 
   /* Si el video o la lista se eliminan mientras suenan, se cierra el reproductor */
   useEffect(() => {
-    if (!cur || !list) stopYt();
-  }, [cur, list, stopYt]);
+    if (!cur || (!looseMode && !list)) stopYt();
+  }, [cur, list, looseMode, stopYt]);
 
   /* Si el video resulta no incrustable, se destruye la instancia */
   useEffect(() => {
@@ -345,7 +377,7 @@ function YtPlayerBar() {
     }
   }, [cur]);
 
-  if (!cur || !list) return null;
+  if (!cur || (!looseMode && !list)) return null;
   const idx = queue.findIndex((v) => v.id === cur.id);
   const next = queue[idx + 1];
   const total = dur || cur.durationSec || 0;
@@ -373,7 +405,7 @@ function YtPlayerBar() {
           <img className="yt-bar-thumb" src={cur.thumbnail || T.ytThumb(cur.youtubeId)} alt="" />
           <div className="yt-bar-meta">
             <div className="yt-bar-title" title={cur.title}>{cur.title}</div>
-            <div className="yt-bar-sub">{cur.channelName} · {list.name}</div>
+            <div className="yt-bar-sub">{cur.channelName} · {groupName}</div>
           </div>
         </div>
         <div className="yt-bar-center">
@@ -911,13 +943,23 @@ function SpacesSec() {
   const tc = useTC();
   const { liveSpaces, openModal } = useApp();
   const spaces = liveSpaces().slice().sort(T.byOrder);
+  /* v2.4.0: el bloque SPACES también se pliega entero, como MIS ITEMS
+     y YOUTUBE MANAGER (cada tarjeta por su cuenta) */
+  const m = tc.db.settings.expandedItems || {};
+  const expanded = m.spaces !== undefined ? !!m.spaces : true;
+  const toggleExpanded = () => {
+    tc.updateSettings({ expandedItems: { ...(tc.db.settings.expandedItems || {}), spaces: !expanded } });
+  };
 
   return (
-    <SecShell secKey="spaces" className="side-section">
-      <h3><span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
+    <SecShell secKey="spaces" className="side-section sec-card sec-spaces">
+      <h3><span className="sec-chev" role="button" title={expanded ? "Plegar bloque" : "Desplegar bloque"}
+          onClick={(e) => { e.stopPropagation(); toggleExpanded(); }}>{expanded ? "▾" : "▸"}</span>
+        <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
         <span className="h3-label">Spaces</span>{" "}
         <button id="btnNewSpace" className="mini-btn" title="Crear space"
           onClick={() => openModal("space", { id: null })}>＋</button></h3>
+      {expanded ? (
       <ul id="spaceTree" className="space-tree">
         {!spaces.length && (
           <li style={{ cursor: "default", color: "var(--muted)", fontSize: 12.5 }}>Sin spaces. Crea uno con ＋.</li>
@@ -938,6 +980,7 @@ function SpacesSec() {
             if (T.hasDT(e, T.DT_SPACE)) tc.reorderSpaces(e.dataTransfer.getData(T.DT_SPACE), null);
           }} />}
       </ul>
+      ) : null}
     </SecShell>
   );
 }
@@ -1147,7 +1190,7 @@ function FolderRows({ spaceId, parentId, depth }: { spaceId: string; parentId: s
 
 function YoutubeSec() {
   const tc = useTC();
-  const { ui, goYt, openModal, liveYtLists, liveYtVideos, liveYtChannels } = useApp();
+  const { ui, goYt, openModal, liveYtLists, liveYtVideos, liveYtChannels, liveYtLooseVideos } = useApp();
   const { clearDropMarks } = useDnD();
   const ulRef = useRef<HTMLUListElement>(null);
 
@@ -1168,6 +1211,7 @@ function YoutubeSec() {
   const videos = liveYtVideos();
   const countOf = (key: string) => {
     if (key === "ytlists") return lists.filter((l) => !l.parentId).length;
+    if (key === "ytloose") return liveYtLooseVideos().length;
     if (key === "ytsubs") return liveYtChannels().length;
     if (key === "ytdone") return lists.filter((l) => {
       const vs = videos.filter((v) => v.listId === l.id);
@@ -1179,7 +1223,7 @@ function YoutubeSec() {
     ui.view === key || (key === "ytlists" && ui.view === "ytlist");
 
   return (
-    <SecShell secKey="youtube" className="side-section">
+    <SecShell secKey="youtube" className="side-section sec-card sec-youtube">
       <ul className="item-tree" ref={ulRef}>
         <li className="item-section">
           <div className={"item-head" + (ui.view.startsWith("yt") ? " active" : "")} role="button" tabIndex={0}
@@ -1278,7 +1322,7 @@ function MisItemsSec() {
   const defOf = (k: string) => T.ITEM_DEFS[k];
 
   return (
-    <SecShell secKey="misitems" className="side-section">
+    <SecShell secKey="misitems" className="side-section sec-card sec-items">
       <ul id="itemList" className="item-tree" ref={ulRef}>
         <li className="item-section">
           <div className={"item-head" + (ui.view === "misitems" ? " active" : "")} role="button" tabIndex={0}
@@ -1472,7 +1516,13 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.3.12</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.4.0</h3><ul>
+          <li>🗂️ <b>Categorías de listas</b>: en Youtube Manager → Listas ya no se mezclan todas — crea categorías por temas (Letón, Aviación, Cursos…) y arrastra cada lista a la suya. Van una al lado de la otra y cada una se pliega/despliega por su cuenta (se recuerda entre dispositivos). Al crear una categoría: nombre, color y <b>Emoji, Iconos UI o Imagen</b>.</li>
+          <li>🎞️ <b>Vídeos sueltos</b>: nueva fila en YOUTUBE MANAGER para los vídeos que no pertenecen a ninguna lista. Se organizan en categorías que son spaces de vídeos: crea la categoría, añade vídeos uno a uno con su enlace y reprodúcelos con el reproductor de siempre (la cola es la categoría). El visto se sincroniza con las listas, como siempre.</li>
+          <li>🧩 <b>Sidebar en tarjetas</b>: SPACES (azul), MIS ITEMS (naranja) y YOUTUBE MANAGER (rojo) van ahora cada uno en su propio cuadro, plegables por su cuenta — SPACES también se pliega entero — y se siguen pudiendo reordenar arrastrando.</li>
+          <li>🗑️ <b>Papelera única, como siempre</b>: las categorías nuevas y los vídeos sueltos también van a MIS ITEMS → Papelera al borrarse (con confirmación), etiquetados por su tipo, y al restaurar una categoría su contenido vuelve a ella.</li>
+          <li>⚠️ Necesita ejecutar UNA vez el SQL nuevo (supabase-migracion-v2.4.0.sql) en Supabase: añade las tablas de categorías y vídeos sueltos sin tocar tus datos.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.3.12</h4><ul>
           <li>🧩 <b>Categorías lado a lado</b> en Suscripciones: en Cuadrícula y Lista ya no se apilan una debajo de otra — van en una rejilla que envuelve, como el Tablero o como tus Listas.</li>
           <li>▸ <b>El Tablero también pliega</b>: las columnas de categoría en el Tablero tienen su flecha para plegarlas y desplegarlas, igual que en las demás vistas (y se recuerda entre dispositivos).</li>
         </ul><h4 style={{ marginTop: 14 }}>v2.3.11</h4><ul>

@@ -46,6 +46,14 @@ export function YtIconEl({ icon, iconType, size }: { icon: string; iconType: str
   if (iconType === "img" && icon) {
     return <img src={icon} alt="" style={{ width: s, height: s, borderRadius: 5, objectFit: "cover", verticalAlign: "-3px" }} />;
   }
+  if (iconType === "ui") {
+    const u = T.UI_ICONS.find((x) => x.id === icon) || T.UI_ICONS[0];
+    return (
+      <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="1.8"
+        strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: "-3px", flex: "0 0 auto" }}
+        dangerouslySetInnerHTML={{ __html: u.paths }} />
+    );
+  }
   return <span style={{ fontSize: s - 2 }}>{icon || "🎬"}</span>;
 }
 
@@ -350,47 +358,114 @@ function YtVideoRow({ v, dragRef }: { v: T.YtVideo; dragRef: React.RefObject<Dra
   );
 }
 
-/* ---------- Vista: Listas ---------- */
+/* ---------- Vista: Listas (v2.4.0: agrupadas por categorías) ---------- */
 
 export function YtListsView() {
   const tc = useTC();
-  const { getViewMode, liveYtLists, liveYtVideos, openModal } = useApp();
+  const { getViewMode, liveYtLists, liveYtVideos, liveYtListCats, openModal } = useApp();
   const dragRef = useRef<DragState>(null);
   const mode = getViewMode("ytlists");
   const tops = liveYtLists().filter((l) => !l.parentId).sort(T.byOrder);
+  const cats = liveYtListCats().sort(T.byOrder);
   const allVideos = liveYtVideos();
   const g = ytListStats(allVideos);
 
+  const sections: { cat: T.YtListCat | null; items: T.YtList[] }[] =
+    cats.map((c) => ({ cat: c, items: tops.filter((l) => l.categoryId === c.id) }));
+  const orphans = tops.filter((l) => !l.categoryId || !cats.find((c) => c.id === l.categoryId));
+  if (orphans.length || !cats.length) sections.push({ cat: null, items: orphans });
+
+  /* Categorías plegadas (se recuerda en settings, entre dispositivos) */
+  const collapsedCats = tc.db.settings.ytCollapsedListCats || [];
+  const catKey = (cat: T.YtListCat | null) => (cat ? cat.id : "none");
+  const isCollapsed = (cat: T.YtListCat | null) => collapsedCats.includes(catKey(cat));
+  const toggleCat = (cat: T.YtListCat | null) => {
+    const k = catKey(cat);
+    tc.updateSettings({
+      ytCollapsedListCats: collapsedCats.includes(k)
+        ? collapsedCats.filter((x) => x !== k)
+        : [...collapsedCats, k],
+    });
+  };
+
+  /* Soltar una lista sobre una sección la mueve a esa categoría */
+  const overCat = (e: React.DragEvent) => {
+    if (T.hasDT(e, T.DT_YTLIST)) { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add("drop-target"); }
+  };
+  const dropOnCat = (cat: T.YtListCat | null) => (e: React.DragEvent) => {
+    e.preventDefault(); (e.currentTarget as HTMLElement).classList.remove("drop-target");
+    if (!T.hasDT(e, T.DT_YTLIST)) return;
+    const did = e.dataTransfer.getData(T.DT_YTLIST);
+    const l = tc.db.ytLists.find((x) => x.id === did);
+    const target = cat ? cat.id : null;
+    if (l && !l.parentId && (l.categoryId || null) !== target) {
+      tc.setYtListCategory(did, target)
+        .then(() => tc.toast("Lista movida a «" + (cat ? cat.name : "Sin categoría") + "»"));
+    }
+  };
+
+  const catHeader = (cat: T.YtListCat | null, items: T.YtList[]) => (
+    <div className="yt-cat-h" draggable={!!cat} data-cathead={cat ? cat.id : ""}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("[data-tog]")) toggleCat(cat);
+      }}
+      onDragStart={(e) => {
+        if (!cat) return;
+        if (dragRef) dragRef.current = { type: T.DT_YTLISTCAT, id: cat.id };
+        e.dataTransfer.setData(T.DT_YTLISTCAT, cat.id);
+        e.dataTransfer.effectAllowed = "move";
+        (e.currentTarget as HTMLElement).classList.add("dragging");
+      }}
+      onDragEnd={(e) => { (e.currentTarget as HTMLElement).classList.remove("dragging"); if (dragRef) dragRef.current = null; }}
+      onDragOver={(e) => {
+        if (!cat || !T.hasDT(e, T.DT_YTLISTCAT)) return;
+        e.preventDefault(); e.stopPropagation();
+        const ds = dragRef && dragRef.current;
+        if (ds && ds.id !== cat.id) (e.currentTarget as HTMLElement).classList.add("drop-before");
+      }}
+      onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-before")}
+      onDrop={(e) => {
+        if (!cat || !T.hasDT(e, T.DT_YTLISTCAT)) return;
+        e.preventDefault(); e.stopPropagation();
+        (e.currentTarget as HTMLElement).classList.remove("drop-before");
+        tc.reorderYtListCats(e.dataTransfer.getData(T.DT_YTLISTCAT), cat.id);
+      }}>
+      <span className="yt-cat-chev" data-tog="1" title={isCollapsed(cat) ? "Desplegar categoría" : "Plegar categoría"}>
+        {isCollapsed(cat) ? "▸" : "▾"}</span>
+      <span className="yt-cat-grip" title="Arrastra para reordenar la categoría">⠿</span>
+      {cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🗂️</span>}
+      <span data-tog="1" style={{ cursor: "pointer" }}>{cat ? cat.name : "Sin categoría"}</span>
+      <span className="yt-cat-count">{items.length}</span>
+      {cat ? (
+        <span className="yt-cat-actions">
+          <button className="icon-btn" title="Nueva lista en esta categoría"
+            onClick={() => openModal("ytlist", { parentId: null, categoryId: cat.id })}>＋</button>
+          <button className="icon-btn" title="Editar categoría"
+            onClick={() => openModal("ytlistcat", { id: cat.id })}>✎</button>
+          <button className="icon-btn" title="Enviar categoría a la papelera"
+            onClick={() => {
+              if (!confirm("¿Enviar a la papelera la categoría «" + cat.name + "»? Sus listas no se borran: quedan sin categoría mientras tanto. Podrás recuperarla desde MIS ITEMS → Papelera durante 30 días.")) return;
+              tc.deleteYtListCat(cat.id).then(() => tc.toast("Categoría enviada a la papelera"));
+            }}>×</button>
+        </span>
+      ) : null}
+    </div>
+  );
+
   const primary = (
     <>
+      <button className="btn" onClick={() => openModal("ytlistcat", {})}>＋ Nueva categoría</button>
       <button className="btn" onClick={() => openModal("ytimport", {})}>📥 Importar playlist</button>
       <button className="btn primary" onClick={() => openModal("ytlist", { parentId: null })}>＋ Nueva lista</button>
     </>
   );
 
   let body: React.ReactNode;
-  if (!tops.length) {
+  if (!tops.length && !cats.length) {
     body = <YtEmpty icon="🎬" lines={[
       "Todavía no tienes listas de YouTube.",
       "Crea la primera con «＋ Nueva lista», o importa una playlist entera de YouTube.",
     ]} />;
-  } else if (mode === "list") {
-    body = (
-      <div className="view-list zoomable">
-        {tops.map((l) => {
-          const vs = allVideos.filter((v) => v.listId === l.id);
-          const st = ytListStats(vs);
-          return <YtListRow key={l.id} l={l} st={st} dragRef={dragRef} />;
-        })}
-        <div className="reorder-endzone" data-kind="ytlist"
-          onDragOver={(e) => { if (T.hasDT(e, T.DT_YTLIST)) { e.preventDefault(); e.currentTarget.classList.add("drop-before"); } }}
-          onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
-          onDrop={(e) => {
-            e.preventDefault(); e.currentTarget.classList.remove("drop-before");
-            if (T.hasDT(e, T.DT_YTLIST)) tc.reorderYtLists(null, e.dataTransfer.getData(T.DT_YTLIST), null);
-          }} />
-      </div>
-    );
   } else if (mode === "board") {
     const cols: { key: string; label: string; items: T.YtList[] }[] = [
       { key: "none", label: "Sin empezar", items: [] },
@@ -414,17 +489,41 @@ export function YtListsView() {
         ))}
       </div>
     );
+  } else if (mode === "list") {
+    body = (
+      <div className={"yt-cat-wrap list"}>
+        {sections.map(({ cat, items }) => (
+          <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
+            onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+            onDrop={dropOnCat(cat)}>
+            {catHeader(cat, items)}
+            {isCollapsed(cat) ? null : items.length ? (
+              <div className="view-list zoomable" style={{ marginTop: 2 }}>
+                {items.map((l) => {
+                  const vs = allVideos.filter((v) => v.listId === l.id);
+                  return <YtListRow key={l.id} l={l} st={ytListStats(vs)} dragRef={dragRef} />;
+                })}
+              </div>
+            ) : <div className="yt-cat-empty">Sin listas en esta categoría — arrastra una aquí</div>}
+          </div>
+        ))}
+      </div>
+    );
   } else {
     body = (
-      <div id="cards" className="cards zoomable">
-        {tops.map((l) => <YtListCard key={l.id} l={l} dragRef={dragRef} />)}
-        <div className="reorder-endzone" data-kind="ytlist"
-          onDragOver={(e) => { if (T.hasDT(e, T.DT_YTLIST)) { e.preventDefault(); e.currentTarget.classList.add("drop-before"); } }}
-          onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
-          onDrop={(e) => {
-            e.preventDefault(); e.currentTarget.classList.remove("drop-before");
-            if (T.hasDT(e, T.DT_YTLIST)) tc.reorderYtLists(null, e.dataTransfer.getData(T.DT_YTLIST), null);
-          }} />
+      <div className="yt-cat-wrap">
+        {sections.map(({ cat, items }) => (
+          <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
+            onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+            onDrop={dropOnCat(cat)}>
+            {catHeader(cat, items)}
+            {isCollapsed(cat) ? null : items.length ? (
+              <div className="cards zoomable yt-listcards">
+                {items.map((l) => <YtListCard key={l.id} l={l} dragRef={dragRef} />)}
+              </div>
+            ) : <div className="yt-cat-empty">Sin listas en esta categoría — arrastra una aquí</div>}
+          </div>
+        ))}
       </div>
     );
   }
@@ -433,9 +532,9 @@ export function YtListsView() {
     <>
       <YtHead vkey="ytlists" primary={primary}
         titleNode={<YtCrumbs trail={[{ label: <>🎬 Listas</> }]} />}
-        subline={tops.length + " lista(s) · " + g.total + " video(s) · " + g.watched + " visto(s)" +
+        subline={tops.length + " lista(s) en " + cats.length + " categoría(s) · " + g.total + " video(s) · " + g.watched + " visto(s)" +
           (g.invested ? " · ⏳ Tiempo invertido: " + T.fmtInvested(g.invested) : "") +
-          " · Arrastra para reordenar"} />
+          " · Arrastra una lista a otra categoría para moverla"} />
       {body}
     </>
   );
@@ -977,3 +1076,284 @@ export function YtDoneView() {
   );
 }
 
+
+/* ---------- v2.4.0: Vídeos sueltos (no pertenecen a ninguna lista) ---------- */
+
+function ytLooseStatus(v: T.YtLooseVideo): "none" | "part" | "done" {
+  if (v.watched) return "done";
+  if ((v.progressSec || 0) > 0) return "part";
+  return "none";
+}
+
+function YtLooseSeenBtn({ v }: { v: T.YtLooseVideo }) {
+  const tc = useTC();
+  const st = ytLooseStatus(v);
+  const label = st === "done" ? "✓" : st === "part" ? "◐" : "○";
+  const title = st === "done" ? "Visto — clic para desmarcar" : "Marcar como visto";
+  return (
+    <button className={"yt-seen " + st} title={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        tc.setYtWatched(v.youtubeId, st !== "done");
+        tc.toast(st === "done" ? "Desmarcado como visto" : "Marcado como visto ✓");
+      }}>{label}</button>
+  );
+}
+
+function YtLooseCard({ v, dragRef }: { v: T.YtLooseVideo; dragRef: React.RefObject<DragState> }) {
+  const tc = useTC();
+  const { playLoose, ytPlayer } = useApp();
+  const { clearDropMarks } = useDnD();
+  const st = ytLooseStatus(v);
+  const pct = v.durationSec ? Math.min(100, Math.round((v.progressSec / v.durationSec) * 100)) : 0;
+  const playing = ytPlayer && ytPlayer.loose && ytPlayer.videoId === v.id;
+  const del = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("¿Enviar a la papelera el video «" + v.title + "»? Podrás recuperarlo desde MIS ITEMS → Papelera durante 30 días.")) return;
+    tc.deleteYtLooseVideo(v.id).then(() => tc.toast("Video enviado a la papelera"));
+  };
+  return (
+    <div className={"card yt-vcard" + (playing ? " playing" : "")} draggable data-id={v.id}
+      title="Arrastra para reordenar o cambiar de categoría · Clic para reproducir"
+      onClick={(e) => { if ((e.target as HTMLElement).closest("[data-act], .yt-seen")) return; playLoose(v.catId, v.id); }}
+      onDragStart={(e) => {
+        if (dragRef) dragRef.current = { type: T.DT_YTLOOSE, id: v.id };
+        e.dataTransfer.setData(T.DT_YTLOOSE, v.id);
+        e.dataTransfer.effectAllowed = "move";
+        e.currentTarget.classList.add("dragging");
+      }}
+      onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); if (dragRef) dragRef.current = null; }}
+      onDragOver={(e) => {
+        if (!T.hasDT(e, T.DT_YTLOOSE)) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = "move";
+        const ds = dragRef && dragRef.current;
+        if (ds && ds.id !== v.id) e.currentTarget.classList.add("drop-before");
+      }}
+      onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
+      onDrop={(e) => {
+        if (!T.hasDT(e, T.DT_YTLOOSE)) return;
+        e.preventDefault(); e.stopPropagation();
+        e.currentTarget.classList.remove("drop-before");
+        const did = e.dataTransfer.getData(T.DT_YTLOOSE);
+        const dv = tc.db.ytLooseVideos.find((x) => x.id === did);
+        if (!dv || dv.id === v.id) return;
+        if ((dv.catId || null) !== (v.catId || null)) { tc.moveYtLooseVideoToCat(did, v.catId || null); return; }
+        tc.reorderYtLooseVideos(v.catId || null, did, v.id);
+      }}>
+      <div className="yt-thumb">
+        <img src={v.thumbnail || T.ytThumb(v.youtubeId)} alt="" loading="lazy" />
+        <span className="yt-play">▶</span>
+        {v.durationSec ? <span className="yt-dur">{T.fmtDur(v.durationSec)}</span> : null}
+        {v.noEmbed ? <span className="yt-noembed-badge" title="Este video no permite inserción">⛔</span> : null}
+        <YtLooseSeenBtn v={v} />
+        {st === "part" ? <div className="yt-vprog"><i style={{ width: pct + "%" }}></i></div> : null}
+      </div>
+      <div className="yt-vbody">
+        <div className="yt-vtitle" title={v.title}>{v.title}</div>
+        <div className="yt-vchan">{v.channelName || "youtube.com"}
+          <button className="icon-btn yt-vdel" data-act="del" title="Enviar video a la papelera" onClick={del}>×</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function YtLooseRow({ v, dragRef }: { v: T.YtLooseVideo; dragRef: React.RefObject<DragState> }) {
+  const tc = useTC();
+  const { playLoose, ytPlayer } = useApp();
+  const { clearDropMarks } = useDnD();
+  const playing = ytPlayer && ytPlayer.loose && ytPlayer.videoId === v.id;
+  return (
+    <div className={"vrow yt-vrow" + (playing ? " playing" : "")} draggable data-id={v.id}
+      title="Arrastra para reordenar · Clic para reproducir"
+      onClick={(e) => { if ((e.target as HTMLElement).closest("[data-act], .yt-seen")) return; playLoose(v.catId, v.id); }}
+      onDragStart={(e) => {
+        if (dragRef) dragRef.current = { type: T.DT_YTLOOSE, id: v.id };
+        e.dataTransfer.setData(T.DT_YTLOOSE, v.id);
+        e.dataTransfer.effectAllowed = "move";
+        e.currentTarget.classList.add("dragging");
+      }}
+      onDragEnd={(e) => { e.currentTarget.classList.remove("dragging"); clearDropMarks(); if (dragRef) dragRef.current = null; }}
+      onDragOver={(e) => {
+        if (!T.hasDT(e, T.DT_YTLOOSE)) return;
+        e.preventDefault(); e.dataTransfer.dropEffect = "move";
+        const ds = dragRef && dragRef.current;
+        if (ds && ds.id !== v.id) e.currentTarget.classList.add("drop-before");
+      }}
+      onDragLeave={(e) => e.currentTarget.classList.remove("drop-before")}
+      onDrop={(e) => {
+        if (!T.hasDT(e, T.DT_YTLOOSE)) return;
+        e.preventDefault(); e.stopPropagation();
+        e.currentTarget.classList.remove("drop-before");
+        const did = e.dataTransfer.getData(T.DT_YTLOOSE);
+        const dv = tc.db.ytLooseVideos.find((x) => x.id === did);
+        if (dv && (dv.catId || null) === (v.catId || null) && dv.id !== v.id) tc.reorderYtLooseVideos(v.catId || null, did, v.id);
+      }}>
+      <span className="yt-row-thumb"><img src={v.thumbnail || T.ytThumb(v.youtubeId)} alt="" loading="lazy" /></span>
+      <div className="vrow-body">
+        <div className="vrow-title">{v.title}</div>
+        <div className="vrow-sub">{v.channelName || "youtube.com"}{v.noEmbed ? " · ⛔ sin inserción" : ""}</div>
+      </div>
+      {v.durationSec ? <span className="vrow-meta">{T.fmtDur(v.durationSec)}</span> : null}
+      <YtLooseSeenBtn v={v} />
+    </div>
+  );
+}
+
+export function YtLooseView() {
+  const tc = useTC();
+  const { getViewMode, liveYtVidCats, liveYtLooseVideos, openModal } = useApp();
+  const dragRef = useRef<DragState>(null);
+  const mode = getViewMode("ytloose");
+  const cats = liveYtVidCats().sort(T.byOrder);
+  const videos = liveYtLooseVideos().sort(T.byOrder);
+  const watched = videos.filter((v) => v.watched).length;
+
+  const sections: { cat: T.YtVidCat | null; items: T.YtLooseVideo[] }[] =
+    cats.map((c) => ({ cat: c, items: videos.filter((v) => v.catId === c.id) }));
+  const orphans = videos.filter((v) => !v.catId || !cats.find((c) => c.id === v.catId));
+  if (orphans.length || !cats.length) sections.push({ cat: null, items: orphans });
+
+  /* Categorías plegadas (se recuerda en settings, entre dispositivos) */
+  const collapsedCats = tc.db.settings.ytCollapsedVidCats || [];
+  const catKey = (cat: T.YtVidCat | null) => (cat ? cat.id : "none");
+  const isCollapsed = (cat: T.YtVidCat | null) => collapsedCats.includes(catKey(cat));
+  const toggleCat = (cat: T.YtVidCat | null) => {
+    const k = catKey(cat);
+    tc.updateSettings({
+      ytCollapsedVidCats: collapsedCats.includes(k)
+        ? collapsedCats.filter((x) => x !== k)
+        : [...collapsedCats, k],
+    });
+  };
+
+  /* Soltar un vídeo sobre una sección lo mueve a esa categoría */
+  const overCat = (e: React.DragEvent) => {
+    if (T.hasDT(e, T.DT_YTLOOSE)) { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add("drop-target"); }
+  };
+  const dropOnCat = (cat: T.YtVidCat | null) => (e: React.DragEvent) => {
+    e.preventDefault(); (e.currentTarget as HTMLElement).classList.remove("drop-target");
+    if (!T.hasDT(e, T.DT_YTLOOSE)) return;
+    const did = e.dataTransfer.getData(T.DT_YTLOOSE);
+    const v = tc.db.ytLooseVideos.find((x) => x.id === did);
+    const target = cat ? cat.id : null;
+    if (v && (v.catId || null) !== target) {
+      tc.moveYtLooseVideoToCat(did, target)
+        .then(() => tc.toast("Video movido a «" + (cat ? cat.name : "Sin clasificar") + "»"));
+    }
+  };
+
+  const catHeader = (cat: T.YtVidCat | null, items: T.YtLooseVideo[]) => (
+    <div className="yt-cat-h" draggable={!!cat} data-cathead={cat ? cat.id : ""}
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("[data-tog]")) toggleCat(cat);
+      }}
+      onDragStart={(e) => {
+        if (!cat) return;
+        if (dragRef) dragRef.current = { type: T.DT_YTVIDCAT, id: cat.id };
+        e.dataTransfer.setData(T.DT_YTVIDCAT, cat.id);
+        e.dataTransfer.effectAllowed = "move";
+        (e.currentTarget as HTMLElement).classList.add("dragging");
+      }}
+      onDragEnd={(e) => { (e.currentTarget as HTMLElement).classList.remove("dragging"); if (dragRef) dragRef.current = null; }}
+      onDragOver={(e) => {
+        if (!cat || !T.hasDT(e, T.DT_YTVIDCAT)) return;
+        e.preventDefault(); e.stopPropagation();
+        const ds = dragRef && dragRef.current;
+        if (ds && ds.id !== cat.id) (e.currentTarget as HTMLElement).classList.add("drop-before");
+      }}
+      onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-before")}
+      onDrop={(e) => {
+        if (!cat || !T.hasDT(e, T.DT_YTVIDCAT)) return;
+        e.preventDefault(); e.stopPropagation();
+        (e.currentTarget as HTMLElement).classList.remove("drop-before");
+        tc.reorderYtVidCats(e.dataTransfer.getData(T.DT_YTVIDCAT), cat.id);
+      }}>
+      <span className="yt-cat-chev" data-tog="1" title={isCollapsed(cat) ? "Desplegar categoría" : "Plegar categoría"}>
+        {isCollapsed(cat) ? "▸" : "▾"}</span>
+      <span className="yt-cat-grip" title="Arrastra para reordenar la categoría">⠿</span>
+      {cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🎞️</span>}
+      <span data-tog="1" style={{ cursor: "pointer" }}>{cat ? cat.name : "Sin clasificar"}</span>
+      <span className="yt-cat-count">{items.length}</span>
+      <span className="yt-cat-actions">
+        <button className="icon-btn" title="Añadir video a esta categoría"
+          onClick={() => openModal("ytloosevideo", { catId: cat ? cat.id : null })}>＋</button>
+        {cat ? (
+          <>
+            <button className="icon-btn" title="Editar categoría"
+              onClick={() => openModal("ytvidcat", { id: cat.id })}>✎</button>
+            <button className="icon-btn" title="Enviar categoría a la papelera"
+              onClick={() => {
+                if (!confirm("¿Enviar a la papelera la categoría «" + cat.name + "»? Sus vídeos no se borran: quedan sin clasificar mientras tanto. Podrás recuperarla desde MIS ITEMS → Papelera durante 30 días.")) return;
+                tc.deleteYtVidCat(cat.id).then(() => tc.toast("Categoría enviada a la papelera"));
+              }}>×</button>
+          </>
+        ) : null}
+      </span>
+    </div>
+  );
+
+  const primary = (
+    <>
+      <button className="btn" onClick={() => openModal("ytvidcat", {})}>＋ Nueva categoría</button>
+      <button className="btn primary" onClick={() => openModal("ytloosevideo", { catId: null })}>＋ Añadir video</button>
+    </>
+  );
+
+  let body: React.ReactNode;
+  if (!videos.length && !cats.length) {
+    body = <YtEmpty icon="🎞️" lines={[
+      "Aquí van los vídeos que no pertenecen a ninguna lista.",
+      "Añade el primero con «＋ Añadir video» y organízalos en categorías (cada categoría es un space de vídeos sueltos).",
+    ]} />;
+  } else if (mode === "board") {
+    body = (
+      <div className="yt-board yt-board-cats">
+        {sections.map(({ cat, items }) => (
+          <div key={cat ? cat.id : "none"} className={"yt-col" + (isCollapsed(cat) ? " yt-col-collapsed" : "")} data-cat={cat ? cat.id : ""}
+            onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+            onDrop={dropOnCat(cat)}>
+            {catHeader(cat, items)}
+            {isCollapsed(cat) ? null : items.map((v) => (
+              <div key={v.id} className="yt-loose-mini"><YtLooseCard v={v} dragRef={dragRef} /></div>
+            ))}
+            {isCollapsed(cat) || items.length ? null : <div className="yt-col-empty">Sin vídeos aquí — arrastra uno</div>}
+          </div>
+        ))}
+      </div>
+    );
+  } else {
+    body = (
+      <div className={"yt-cat-wrap" + (mode === "list" ? " list" : "")}>
+        {sections.map(({ cat, items }) => (
+          <div key={cat ? cat.id : "none"} className="yt-cat-sec" data-cat={cat ? cat.id : ""}
+            onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
+            onDrop={dropOnCat(cat)}>
+            {catHeader(cat, items)}
+            {isCollapsed(cat) ? null : items.length ? (
+              mode === "list" ? (
+                <div className="view-list zoomable" style={{ marginTop: 2 }}>
+                  {items.map((v) => <YtLooseRow key={v.id} v={v} dragRef={dragRef} />)}
+                </div>
+              ) : (
+                <div className="cards zoomable yt-loosecards">
+                  {items.map((v) => <YtLooseCard key={v.id} v={v} dragRef={dragRef} />)}
+                </div>
+              )
+            ) : <div className="yt-cat-empty">Sin vídeos en esta categoría — arrastra uno aquí o usa ＋</div>}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <YtHead vkey="ytloose" primary={primary}
+        titleNode={<YtCrumbs trail={[{ label: <>🎞️ Vídeos sueltos</> }]} />}
+        subline={videos.length + " vídeo(s) sin lista en " + cats.length + " categoría(s) · " + watched + " visto(s)" +
+          " · Arrastra un vídeo a otra categoría para moverlo"} />
+      {body}
+    </>
+  );
+}

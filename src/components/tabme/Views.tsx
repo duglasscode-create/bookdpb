@@ -7,7 +7,7 @@ import * as T from "@/lib/tc";
 import { useTC } from "@/lib/tc-store";
 import { useApp, useDnD } from "./tc-ui";
 import { NotePopover } from "./NotesView";
-import { YtListsView, YtListView, YtSubsView, YtDoneView } from "./YoutubeViews";
+import { YtListsView, YtListView, YtSubsView, YtDoneView, YtLooseView } from "./YoutubeViews";
 
 type DragState = { type: string; id: string } | null;
 
@@ -1139,6 +1139,9 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "ytvideos") await tc.restoreYtVideo(t.id);
     else if (t.kind === "ytcats") await tc.restoreYtCategory(t.id);
     else if (t.kind === "ytchannels") await tc.restoreYtChannel(t.id);
+    else if (t.kind === "ytlistcats") await tc.restoreYtListCat(t.id);
+    else if (t.kind === "ytvidcats") await tc.restoreYtVidCat(t.id);
+    else if (t.kind === "ytloose") await tc.restoreYtLooseVideo(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1154,6 +1157,9 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "ytvideos") await tc.purgeYtVideo(t.id);
     else if (t.kind === "ytcats") await tc.purgeYtCategory(t.id);
     else if (t.kind === "ytchannels") await tc.purgeYtChannel(t.id);
+    else if (t.kind === "ytlistcats") await tc.purgeYtListCat(t.id);
+    else if (t.kind === "ytvidcats") await tc.purgeYtVidCat(t.id);
+    else if (t.kind === "ytloose") await tc.purgeYtLooseVideo(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (
@@ -1184,6 +1190,9 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "ytvideos") await tc.restoreYtVideo(t.id);
     else if (t.kind === "ytcats") await tc.restoreYtCategory(t.id);
     else if (t.kind === "ytchannels") await tc.restoreYtChannel(t.id);
+    else if (t.kind === "ytlistcats") await tc.restoreYtListCat(t.id);
+    else if (t.kind === "ytvidcats") await tc.restoreYtVidCat(t.id);
+    else if (t.kind === "ytloose") await tc.restoreYtLooseVideo(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1199,6 +1208,9 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "ytvideos") await tc.purgeYtVideo(t.id);
     else if (t.kind === "ytcats") await tc.purgeYtCategory(t.id);
     else if (t.kind === "ytchannels") await tc.purgeYtChannel(t.id);
+    else if (t.kind === "ytlistcats") await tc.purgeYtListCat(t.id);
+    else if (t.kind === "ytvidcats") await tc.purgeYtVidCat(t.id);
+    else if (t.kind === "ytloose") await tc.purgeYtLooseVideo(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (
@@ -1374,6 +1386,7 @@ export function Views() {
   else if (v === "ytlist") body = <YtListView />;
   else if (v === "ytsubs") body = <YtSubsView />;
   else if (v === "ytdone") body = <YtDoneView />;
+  else if (v === "ytloose") body = <YtLooseView />;
 
   return (
     <>

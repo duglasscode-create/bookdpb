@@ -40,6 +40,24 @@ export type YtList = {
   id: string; parentId: string | null; name: string;
   color: string; icon: string; iconType: string;
   order: number; deletedAt: number | null;
+  categoryId: string | null;
+};
+/* v2.4.0: categorías que agrupan listas por temas */
+export type YtListCat = {
+  id: string; name: string; color: string; icon: string; iconType: string;
+  order: number; deletedAt: number | null;
+};
+/* v2.4.0: categorías («spaces») de vídeos sueltos */
+export type YtVidCat = {
+  id: string; name: string; color: string; icon: string; iconType: string;
+  order: number; deletedAt: number | null;
+};
+/* v2.4.0: vídeo suelto (no pertenece a ninguna lista) */
+export type YtLooseVideo = {
+  id: string; catId: string | null; youtubeId: string; title: string; channelName: string;
+  thumbnail: string; durationSec: number;
+  watched: boolean; progressSec: number; secondsWatched: number; noEmbed: boolean;
+  order: number; deletedAt: number | null;
 };
 export type YtVideo = {
   id: string; listId: string; youtubeId: string; title: string; channelName: string;
@@ -66,12 +84,14 @@ export type Settings = {
   itemOrder: string[]; itemExpanded: Record<string, boolean>;
   sidebarLayout: string[]; tagColors: Record<string, string>;
   ytOrder: string[]; ytCollapsedCats: string[];
+  ytCollapsedListCats: string[]; ytCollapsedVidCats: string[];
 };
 export type DB = {
   spaces: Space[]; folders: Folder[]; bookmarks: Bookmark[]; notes: NoteT[];
   accounts: Account[]; assistants: Assistant[]; reminders: Reminder[];
   activity: Activity[]; settings: Settings;
   ytLists: YtList[]; ytVideos: YtVideo[]; ytCats: YtCategory[]; ytChannels: YtChannel[];
+  ytListCats: YtListCat[]; ytVidCats: YtVidCat[]; ytLooseVideos: YtLooseVideo[];
 };
 
 /* ---------- Constantes literales del original ---------- */
@@ -109,6 +129,30 @@ export const DT_YTLIST = 'application/x-tbc-ytlist';
 export const DT_YTVIDEO = 'application/x-tbc-ytvideo';
 export const DT_YTCHANNEL = 'application/x-tbc-ytchannel';
 export const DT_YTSEC = 'application/x-tbc-ytsec';
+export const DT_YTLISTCAT = 'application/x-tbc-ytlistcat';
+export const DT_YTVIDCAT = 'application/x-tbc-ytvidcat';
+export const DT_YTLOOSE = 'application/x-tbc-ytloose';
+
+/* Iconos UI (línea) para las categorías de Youtube Manager (v2.4.0).
+   Se guardan como iconType "ui" + icon = id de esta lista. */
+export const UI_ICONS: { id: string; label: string; paths: string }[] = [
+  { id: "folder", label: "Carpeta", paths: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>' },
+  { id: "file", label: "Archivo", paths: '<path d="M6 3.5h8L19 8.5V20a.5.5 0 0 1-.5.5h-12A.5.5 0 0 1 6 20z"/><path d="M13.5 3.5v5.5H19"/>' },
+  { id: "star", label: "Estrella", paths: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>' },
+  { id: "heart", label: "Corazón", paths: '<path d="M12 20.5C7 16.5 3.5 13.3 3.5 9.6A4.6 4.6 0 0 1 12 6a4.6 4.6 0 0 1 8.5 3.6c0 3.7-3.5 6.9-8.5 10.9z"/>' },
+  { id: "music", label: "Música", paths: '<path d="M9 18.5V6l11-2.2V16"/><circle cx="6.5" cy="18.5" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>' },
+  { id: "book", label: "Libro", paths: '<path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 1 6.5 18H19v3H6.5A1.5 1.5 0 0 1 5 19.5z"/>' },
+  { id: "gear", label: "Ajustes", paths: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v3M12 18.2v3M2.8 12h3M18.2 12h3M5.5 5.5l2.1 2.1M16.4 16.4l2.1 2.1M18.5 5.5l-2.1 2.1M7.6 16.4l-2.1 2.1"/>' },
+  { id: "pin", label: "Pin", paths: '<path d="M12 21s-6.5-5.4-6.5-10.5a6.5 6.5 0 0 1 13 0C18.5 15.6 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.3"/>' },
+  { id: "tag", label: "Etiqueta", paths: '<path d="M3.5 12.5V4A.5.5 0 0 1 4 3.5h8.5L21 12l-8.5 8.5z"/><circle cx="8" cy="8" r="1.6"/>' },
+  { id: "globe", label: "Mundo", paths: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.3 3.8 5.2 3.8 8.5s-1.3 6.2-3.8 8.5c-2.5-2.3-3.8-5.2-3.8-8.5s1.3-6.2 3.8-8.5z"/>' },
+  { id: "bolt", label: "Rayo", paths: '<path d="M13 2.5L4.5 13.5H11L9.8 21.5l8.7-11H12z"/>' },
+  { id: "camera", label: "Cámara", paths: '<rect x="3" y="7" width="18" height="13" rx="2"/><circle cx="12" cy="13.5" r="3.5"/><path d="M8.5 7l1.5-2.5h4L15.5 7"/>' },
+  { id: "clock", label: "Reloj", paths: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>' },
+  { id: "home", label: "Casa", paths: '<path d="M4 11l8-7 8 7"/><path d="M6.5 9.5V20h11V9.5"/>' },
+  { id: "play", label: "Play", paths: '<circle cx="12" cy="12" r="8.5"/><path d="M10 8.5l6 3.5-6 3.5z"/>' },
+  { id: "check", label: "Check", paths: '<path d="M4.5 12.5l5 5L19.5 7"/>' },
+];
 
 /* ---------- Youtube Manager: utilidades ---------- */
 export function ytIdOf(input: string): string | null {
@@ -365,4 +409,5 @@ export const DEFAULT_SETTINGS: Settings = {
   collapsedFolders: {}, expandedSpaces: {}, expandedItems: {},
   viewModes: {}, cardZoom: 1, itemOrder: [], itemExpanded: {},
   sidebarLayout: [], tagColors: {}, ytOrder: [], ytCollapsedCats: [],
+  ytCollapsedListCats: [], ytCollapsedVidCats: [],
 };

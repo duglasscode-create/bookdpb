@@ -36,9 +36,13 @@ type AppCtx = {
   liveYtVideos: () => T.YtVideo[];
   liveYtCats: () => T.YtCategory[];
   liveYtChannels: () => T.YtChannel[];
+  liveYtListCats: () => T.YtListCat[];
+  liveYtVidCats: () => T.YtVidCat[];
+  liveYtLooseVideos: () => T.YtLooseVideo[];
   ytListById: (id: string | null) => T.YtList | undefined;
-  ytPlayer: { listId: string; videoId: string } | null;
+  ytPlayer: { listId: string; videoId: string; loose?: boolean } | null;
   playYt: (listId: string, videoId: string) => void;
+  playLoose: (catId: string | null, videoId: string) => void;
   stopYt: () => void;
   modal: ModalState;
   openModal: (kind: string, props?: any) => void;
@@ -104,10 +108,16 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
   const liveYtVideos = useCallback(() => (db.ytVideos || []).filter((v) => !v.deletedAt), [db]);
   const liveYtCats = useCallback(() => (db.ytCats || []).filter((c) => !c.deletedAt), [db]);
   const liveYtChannels = useCallback(() => (db.ytChannels || []).filter((c) => !c.deletedAt), [db]);
+  const liveYtListCats = useCallback(() => (db.ytListCats || []).filter((c) => !c.deletedAt), [db]);
+  const liveYtVidCats = useCallback(() => (db.ytVidCats || []).filter((c) => !c.deletedAt), [db]);
+  const liveYtLooseVideos = useCallback(() => (db.ytLooseVideos || []).filter((v) => !v.deletedAt), [db]);
   const ytListById = useCallback((id: string | null) =>
     (db.ytLists || []).find((l) => l.id === id), [db]);
-  const [ytPlayer, setYtPlayer] = useState<{ listId: string; videoId: string } | null>(null);
+  const [ytPlayer, setYtPlayer] = useState<{ listId: string; videoId: string; loose?: boolean } | null>(null);
   const playYt = useCallback((listId: string, videoId: string) => setYtPlayer({ listId, videoId }), []);
+  /* v2.4.0: reproducir un vídeo suelto; listId guarda la categoría (o "") */
+  const playLoose = useCallback((catId: string | null, videoId: string) =>
+    setYtPlayer({ listId: catId || "", videoId, loose: true }), []);
   const stopYt = useCallback(() => setYtPlayer(null), []);
 
   const folderById = useCallback((id: string | null) =>
@@ -231,6 +241,9 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     push("ytvideos", "Video de YouTube", "▶️", db.ytVideos || [], (x) => x.title);
     push("ytcats", "Categoría de YouTube", "🗂️", db.ytCats || [], (x) => x.name);
     push("ytchannels", "Canal de YouTube", "📡", db.ytChannels || [], (x) => x.name);
+    push("ytlistcats", "Categoría de listas", "🗂️", db.ytListCats || [], (x) => x.name);
+    push("ytvidcats", "Categoría de vídeos", "🎞️", db.ytVidCats || [], (x) => x.name);
+    push("ytloose", "Video suelto", "🎞️", db.ytLooseVideos || [], (x) => x.title);
     return out.sort((a, b) => b.deletedAt - a.deletedAt);
   }, [db]);
 
@@ -291,8 +304,9 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
 
   const value: AppCtx = {
     ui, setUi, goHome, goSpace, goFolder, goItem, goTag,
-    goYt, goYtList, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels, ytListById,
-    ytPlayer, playYt, stopYt,
+    goYt, goYtList, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels,
+    liveYtListCats, liveYtVidCats, liveYtLooseVideos, ytListById,
+    ytPlayer, playYt, playLoose, stopYt,
     modal, openModal, closeModal, openDd, setOpenDd,
     liveSpaces, liveFolders, liveBookmarks, liveNotes, liveAccounts, liveAssistants, liveReminders,
     spaceStats, childFolders, folderById, spaceById,

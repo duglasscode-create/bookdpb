@@ -1225,7 +1225,7 @@ function NoteFullModal({ id }: { id: string }) {
 
 /* ---------- Youtube Manager: modal lista / sublista ---------- */
 
-function YtListModal({ id, parentId }: { id?: string; parentId?: string | null }) {
+function YtListModal({ id, parentId, categoryId }: { id?: string; parentId?: string | null; categoryId?: string | null }) {
   const tc = useTC();
   const { closeModal, goYtList, liveYtLists } = useApp();
   const db = tc.db;
@@ -1245,7 +1245,7 @@ function YtListModal({ id, parentId }: { id?: string; parentId?: string | null }
     } else {
       const nl = await tc.createYtList({
         name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType,
-        parentId: parentId || null,
+        parentId: parentId || null, categoryId: categoryId || null,
       });
       tc.toast(parent ? "Sublista creada" : "Lista creada");
       closeModal();
@@ -1269,6 +1269,107 @@ function YtListModal({ id, parentId }: { id?: string; parentId?: string | null }
         <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
       </div>
     </ModalShell>
+  );
+}
+
+/* ---------- Youtube Manager: selector de icono con Iconos UI (v2.4.0) ----------
+   Como el IconPicker de la casa, pero con la tercera pestaña «Iconos UI»
+   que pedía Duglass para las categorías: Emoji / Iconos UI / Imagen. */
+
+function YtCatIconPicker({ icon, iconType, onPick }:
+  { icon: string; iconType: string; onPick: (v: { icon: string; iconType: string }) => void }) {
+  const tc = useTC();
+  const [tab, setTab] = useState(iconType === "img" ? "img" : iconType === "ui" ? "ui" : "emoji");
+  const [emoji, setEmoji] = useState(iconType === "emoji" ? (icon || "") : "");
+  const [ui, setUi] = useState(iconType === "ui" ? icon : "");
+  const [img, setImg] = useState(iconType === "img" ? (icon || "") : "");
+  const [urlText, setUrlText] = useState(iconType === "img" ? (icon || "") : "");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pick = (e: string, it: string) => onPick({ icon: e, iconType: it });
+  const uiDef = T.UI_ICONS.find((x) => x.id === ui);
+
+  return (
+    <div className="field"><label>Icono</label>
+      <div className="ip-tabs">
+        <button type="button" className={"ip-tab" + (tab === "emoji" ? " active" : "")}
+          onClick={() => setTab("emoji")}>😀 Emoji</button>
+        <button type="button" className={"ip-tab" + (tab === "ui" ? " active" : "")}
+          onClick={() => setTab("ui")}>🔷 Iconos UI</button>
+        <button type="button" className={"ip-tab" + (tab === "img" ? " active" : "")}
+          onClick={() => setTab("img")}>🖼 Imagen</button>
+      </div>
+      <div className={"ip-pane" + (tab === "emoji" ? "" : " hidden")}>
+        <div className="icon-row">
+          <span className="icon-preview">{emoji || "📁"}</span>
+          <input type="text" maxLength={12} placeholder="Pega un emoji…" autoComplete="off"
+            value={emoji}
+            onChange={(e) => { const v = e.target.value.trim().slice(0, 12); setEmoji(v); pick(v, "emoji"); }} />
+        </div>
+        <div className="icon-grid">
+          {T.ICON_SUGGESTIONS.map((e) => (
+            <button key={e} type="button" className={"icon-opt" + (e === emoji ? " selected" : "")}
+              onClick={() => { setEmoji(e); pick(e, "emoji"); }}>{e}</button>
+          ))}
+          <button type="button" className="icon-opt icon-none" title="Sin icono"
+            onClick={() => { setEmoji(""); pick("", "emoji"); }}>∅</button>
+        </div>
+      </div>
+      <div className={"ip-pane" + (tab === "ui" ? "" : " hidden")}>
+        <div className="icon-row">
+          <span className="icon-preview">
+            {uiDef ? (
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8"
+                strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: uiDef.paths }} />
+            ) : "🔷"}
+          </span>
+          <span className="ip-hint">{uiDef ? uiDef.label : "Elige un icono de línea"}</span>
+        </div>
+        <div className="icon-grid">
+          {T.UI_ICONS.map((u) => (
+            <button key={u.id} type="button" title={u.label}
+              className={"icon-opt" + (u.id === ui ? " selected" : "")}
+              onClick={() => { setUi(u.id); pick(u.id, "ui"); }}>
+              <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8"
+                strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: u.paths }} />
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className={"ip-pane" + (tab === "img" ? "" : " hidden")}>
+        <div className="icon-row">
+          <span className="icon-preview">
+            {T.safeIconURL(img) ? <T.ImgIcon url={T.safeIconURL(img)} size={26} /> : "🖼"}
+          </span>
+          <input type="url" placeholder="https://…/icono.png" autoComplete="off" spellCheck={false}
+            value={urlText}
+            onChange={(e) => {
+              const v = e.target.value.trim();
+              setUrlText(v);
+              const u = T.safeIconURL(v);
+              setImg(u || v);
+              pick(u || "", u ? "img" : "emoji");
+            }} />
+        </div>
+        <div className="ip-actions">
+          <button type="button" className="btn"
+            onClick={() => fileRef.current?.click()}>📤 Subir imagen…</button>
+          <span className="ip-hint">PNG, JPG, SVG o WebP · máx. 200 KB (se reduce solo)</span>
+        </div>
+        <input type="file" ref={fileRef} accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files && e.target.files[0];
+            e.target.value = "";
+            if (!file) return;
+            try {
+              const du = await fileToIconDataURL(file);
+              setImg(du); setUrlText(""); pick(du, "img");
+              tc.toast("Imagen lista");
+            } catch (err) {
+              tc.toast((err as Error).message === "muy-grande" ? "La imagen supera los 200 KB" : "No se pudo leer la imagen");
+            }
+          }} />
+      </div>
+    </div>
   );
 }
 
@@ -1302,12 +1403,165 @@ function YtCatModal({ id }: { id?: string }) {
       <div className="field"><label>Nombre</label>
         <input type="text" id="mName" ref={nameRef} defaultValue={edit ? edit.name : ""} placeholder="p. ej. Aviación" />
       </div>
-      <IconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
+      <YtCatIconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
         onPick={(v) => { iconRef.current = v; }} />
       <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
       <div className="modal-actions">
         <button className="btn" onClick={closeModal}>Cancelar</button>
         <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------- v2.4.0: modal categoría de listas ---------- */
+
+function YtListCatModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal } = useApp();
+  const edit = id ? (tc.db.ytListCats || []).find((c) => c.id === id) : undefined;
+  const nameRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef(edit ? edit.color : T.PALETTE[0]);
+  const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
+
+  const save = async () => {
+    const name = nameRef.current?.value.trim() || "";
+    if (!name) { tc.toast("Escribe un nombre"); return; }
+    const ic = iconRef.current;
+    if (edit) {
+      await tc.saveYtListCat({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      tc.toast("Categoría guardada");
+    } else {
+      await tc.createYtListCat({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      tc.toast("Categoría creada");
+    }
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>{edit ? "Editar categoría de listas" : "🗂️ Nueva categoría de listas"}</h3>
+      <div className="field"><label>Nombre</label>
+        <input type="text" id="mName" ref={nameRef} defaultValue={edit ? edit.name : ""} placeholder="p. ej. Letón · Latvia" />
+      </div>
+      <YtCatIconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
+        onPick={(v) => { iconRef.current = v; }} />
+      <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------- v2.4.0: modal categoría de vídeos sueltos ---------- */
+
+function YtVidCatModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal } = useApp();
+  const edit = id ? (tc.db.ytVidCats || []).find((c) => c.id === id) : undefined;
+  const nameRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef(edit ? edit.color : T.PALETTE[0]);
+  const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
+
+  const save = async () => {
+    const name = nameRef.current?.value.trim() || "";
+    if (!name) { tc.toast("Escribe un nombre"); return; }
+    const ic = iconRef.current;
+    if (edit) {
+      await tc.saveYtVidCat({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      tc.toast("Categoría guardada");
+    } else {
+      await tc.createYtVidCat({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      tc.toast("Categoría creada");
+    }
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>{edit ? "Editar categoría de vídeos" : "🎞️ Nueva categoría de vídeos"}</h3>
+      <div className="field"><label>Nombre</label>
+        <input type="text" id="mName" ref={nameRef} defaultValue={edit ? edit.name : ""} placeholder="p. ej. Para ver cuando pueda" />
+      </div>
+      <YtCatIconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
+        onPick={(v) => { iconRef.current = v; }} />
+      <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
+      </div>
+    </ModalShell>
+  );
+}
+
+/* ---------- v2.4.0: modal añadir vídeo suelto ---------- */
+
+function YtLooseVideoModal({ catId }: { catId?: string | null }) {
+  const tc = useTC();
+  const { closeModal, liveYtVidCats } = useApp();
+  const cat = catId ? liveYtVidCats().find((c) => c.id === catId) : undefined;
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<{ youtubeId: string; title: string; channelName: string } | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  const resolve = async (u: string) => {
+    const yid = T.ytIdOf(u);
+    if (!yid) { setFound(null); return; }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/yt?video=" + encodeURIComponent(u));
+      const j = await r.json();
+      if (r.ok) setFound({ youtubeId: j.youtubeId, title: j.title, channelName: j.channelName || "" });
+      else setFound({ youtubeId: yid, title: "", channelName: "" });
+    } catch {
+      setFound({ youtubeId: yid, title: "", channelName: "" });
+    }
+    setBusy(false);
+  };
+
+  const save = async () => {
+    const yid = found ? found.youtubeId : T.ytIdOf(url);
+    if (!yid) { tc.toast("Pega una URL de video de YouTube válida"); return; }
+    const manual = titleRef.current?.value.trim() || "";
+    await tc.createYtLooseVideo({
+      catId: catId || null, youtubeId: yid,
+      title: manual || (found ? found.title : "") || "Video de YouTube",
+      channelName: found ? found.channelName : "",
+      thumbnail: T.ytThumb(yid),
+    });
+    tc.toast("Video suelto añadido" + (cat ? " a «" + cat.name + "»" : ""));
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>🎞️ Añadir video suelto{cat ? " a «" + cat.name + "»" : ""}</h3>
+      <div className="field"><label>URL del video de YouTube</label>
+        <input type="url" placeholder="https://www.youtube.com/watch?v=…" autoComplete="off" spellCheck={false}
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); }}
+          onBlur={() => resolve(url)}
+          onPaste={(e) => { const t = e.clipboardData.getData("text"); setTimeout(() => resolve(t), 0); }} />
+      </div>
+      {busy ? <p className="ip-hint">Buscando el video…</p> : null}
+      {found ? (
+        <div className="yt-found">
+          <img src={T.ytThumb(found.youtubeId)} alt="" />
+          <div>
+            <div className="yt-found-title">{found.title || "(sin título: escribe uno abajo)"}</div>
+            <div className="yt-found-sub">{found.channelName}</div>
+          </div>
+        </div>
+      ) : null}
+      <div className="field"><label>Título (solo si quieres cambiarlo)</label>
+        <input type="text" ref={titleRef} placeholder={found ? found.title : "Título del video"} />
+      </div>
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save} disabled={busy}>Añadir</button>
       </div>
     </ModalShell>
   );
@@ -1597,11 +1851,14 @@ export function Modals() {
     case "note": return <NoteEditorModal id={p.id} title={p.title} />;
     case "noteFull": return <NoteFullModal id={p.id} />;
     case "itemPick": return <ItemPickModal />;
-    case "ytlist": return <YtListModal id={p.id} parentId={p.parentId} />;
+    case "ytlist": return <YtListModal id={p.id} parentId={p.parentId} categoryId={p.categoryId} />;
     case "ytvideo": return <YtVideoModal listId={p.listId} />;
     case "ytimport": return <YtImportModal listId={p.listId} />;
     case "ytchannel": return <YtChannelModal id={p.id} />;
     case "ytcat": return <YtCatModal id={p.id} />;
+    case "ytlistcat": return <YtListCatModal id={p.id} />;
+    case "ytvidcat": return <YtVidCatModal id={p.id} />;
+    case "ytloosevideo": return <YtLooseVideoModal catId={p.catId} />;
     case "colorPick": return <ColorPickModal current={p.current} onPick={p.onPick} />;
     default: return null;
   }

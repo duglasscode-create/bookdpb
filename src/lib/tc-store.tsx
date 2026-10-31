@@ -124,6 +124,27 @@ type Ctx = {
   restoreYtChannel: (id: string) => Promise<void>;
   purgeYtChannel: (id: string) => Promise<void>;
   reorderYtChannels: (categoryId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
+  /* v2.4.0: categorías de listas, categorías de vídeos y vídeos sueltos */
+  createYtListCat: (input: Partial<T.YtListCat>) => Promise<T.YtListCat>;
+  saveYtListCat: (c: T.YtListCat) => Promise<void>;
+  deleteYtListCat: (id: string) => Promise<void>;
+  restoreYtListCat: (id: string) => Promise<void>;
+  purgeYtListCat: (id: string) => Promise<void>;
+  reorderYtListCats: (dragId: string, beforeId: string | null) => Promise<void>;
+  setYtListCategory: (listId: string, catId: string | null) => Promise<void>;
+  createYtVidCat: (input: Partial<T.YtVidCat>) => Promise<T.YtVidCat>;
+  saveYtVidCat: (c: T.YtVidCat) => Promise<void>;
+  deleteYtVidCat: (id: string) => Promise<void>;
+  restoreYtVidCat: (id: string) => Promise<void>;
+  purgeYtVidCat: (id: string) => Promise<void>;
+  reorderYtVidCats: (dragId: string, beforeId: string | null) => Promise<void>;
+  createYtLooseVideo: (input: Partial<T.YtLooseVideo> & { youtubeId: string }) => Promise<T.YtLooseVideo>;
+  saveYtLooseVideo: (v: T.YtLooseVideo) => Promise<void>;
+  deleteYtLooseVideo: (id: string) => Promise<void>;
+  restoreYtLooseVideo: (id: string) => Promise<void>;
+  purgeYtLooseVideo: (id: string) => Promise<void>;
+  moveYtLooseVideoToCat: (videoId: string, catId: string | null) => Promise<void>;
+  reorderYtLooseVideos: (catId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
   /* activity + trash */
   logActivity: (type: string, text: string, detail?: string) => Promise<void>;
   clearActivity: () => Promise<void>;
@@ -145,6 +166,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     spaces: [], folders: [], bookmarks: [], notes: [],
     accounts: [], assistants: [], reminders: [], activity: [],
     ytLists: [], ytVideos: [], ytCats: [], ytChannels: [],
+    ytListCats: [], ytVidCats: [], ytLooseVideos: [],
     settings: { ...T.DEFAULT_SETTINGS },
   }));
   /* Ref espejo síncrono: permite leer el estado justo después de escribirlo
@@ -181,7 +203,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow, ytl, ytv, ytc, yth] = await Promise.all([
+      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow, ytl, ytv, ytc, yth, ylc, yvc, ylv] = await Promise.all([
         supabase.from("collections").select("*").eq("user_id", userId).order("position", { ascending: true }),
         supabase.from("bookmarks").select("*").eq("user_id", userId),
         supabase.from("bookmark_collections").select("bookmark_id, collection_id").eq("user_id", userId),
@@ -198,6 +220,10 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         supabase.from("yt_videos").select("*").eq("user_id", userId),
         supabase.from("yt_categories").select("*").eq("user_id", userId),
         supabase.from("yt_channels").select("*").eq("user_id", userId),
+        /* v2.4.0: si las tablas aún no existen, data viene null y se sigue sin ellas */
+        supabase.from("yt_list_cats").select("*").eq("user_id", userId),
+        supabase.from("yt_vid_cats").select("*").eq("user_id", userId),
+        supabase.from("yt_loose_videos").select("*").eq("user_id", userId),
       ]);
       const colRows: Record<string, any>[] = (cols.data || []) as Record<string, any>[];
       const spaceRows = colRows.filter((c) => !c.parent_id && !(c as any).is_deleted);
@@ -291,6 +317,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         id: l.id, parentId: l.parent_id || null, name: l.name || "Lista",
         color: l.color || T.PALETTE[0], icon: l.icon || "", iconType: l.icon_type || "emoji",
         order: l.position ?? i, deletedAt: l.is_deleted ? (ts(l.deleted_at) || Date.now()) : null,
+        categoryId: l.category_id || null,
       }));
       const ytVideos: T.YtVideo[] = ((ytv.data || []) as any[]).map((v: any, i: number) => ({
         id: v.id, listId: v.list_id, youtubeId: v.youtube_id, title: v.title || "",
@@ -312,7 +339,26 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         order: c.position ?? i, deletedAt: c.is_deleted ? (ts(c.deleted_at) || Date.now()) : null,
       }));
 
-      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings, ytLists, ytVideos, ytCats, ytChannels });
+      const ytListCats: T.YtListCat[] = ((ylc.data || []) as any[]).map((c: any, i: number) => ({
+        id: c.id, name: c.name || "Categoría", color: c.color || T.PALETTE[0],
+        icon: c.icon || "", iconType: c.icon_type || "emoji",
+        order: c.position ?? i, deletedAt: c.is_deleted ? (ts(c.deleted_at) || Date.now()) : null,
+      }));
+      const ytVidCats: T.YtVidCat[] = ((yvc.data || []) as any[]).map((c: any, i: number) => ({
+        id: c.id, name: c.name || "Categoría", color: c.color || T.PALETTE[0],
+        icon: c.icon || "", iconType: c.icon_type || "emoji",
+        order: c.position ?? i, deletedAt: c.is_deleted ? (ts(c.deleted_at) || Date.now()) : null,
+      }));
+      const ytLooseVideos: T.YtLooseVideo[] = ((ylv.data || []) as any[]).map((v: any, i: number) => ({
+        id: v.id, catId: v.cat_id || null, youtubeId: v.youtube_id, title: v.title || "",
+        channelName: v.channel_name || "", thumbnail: v.thumbnail || T.ytThumb(v.youtube_id),
+        durationSec: v.duration_sec || 0, watched: !!v.watched,
+        progressSec: v.progress_sec || 0, secondsWatched: v.seconds_watched || 0,
+        noEmbed: !!v.no_embed, order: v.position ?? i,
+        deletedAt: v.is_deleted ? (ts(v.deleted_at) || Date.now()) : null,
+      }));
+
+      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings, ytLists, ytVideos, ytCats, ytChannels, ytListCats, ytVidCats, ytLooseVideos });
       (window as unknown as { __tcSettings?: T.Settings }).__tcSettings = settings;
       settingsReady.current = true;
 
@@ -996,7 +1042,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase]);
 
   const emptyTrash = useCallback(async () => {
-    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[], ytLists: [] as string[], ytVideos: [] as string[], ytChannels: [] as string[], ytCats: [] as string[] };
+    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[], ytLists: [] as string[], ytVideos: [] as string[], ytChannels: [] as string[], ytCats: [] as string[], ytListCats: [] as string[], ytVidCats: [] as string[], ytLooseVideos: [] as string[] };
     setDb((d) => {
       d.spaces.forEach((s) => { if (s.deletedAt) st.spaces.push(s.id); });
       d.folders.forEach((f) => { if (f.deletedAt) st.folders.push(f.id); });
@@ -1012,6 +1058,9 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       d.ytVideos.forEach((v) => { if (st.ytLists.includes(v.listId) && !st.ytVideos.includes(v.id)) st.ytVideos.push(v.id); });
       d.ytChannels.forEach((c) => { if (c.deletedAt) st.ytChannels.push(c.id); });
       d.ytCats.forEach((c) => { if (c.deletedAt) st.ytCats.push(c.id); });
+      (d.ytListCats || []).forEach((c) => { if (c.deletedAt) st.ytListCats.push(c.id); });
+      (d.ytVidCats || []).forEach((c) => { if (c.deletedAt) st.ytVidCats.push(c.id); });
+      (d.ytLooseVideos || []).forEach((v) => { if (v.deletedAt) st.ytLooseVideos.push(v.id); });
       return {
         ...d,
         spaces: d.spaces.filter((s) => !s.deletedAt),
@@ -1021,10 +1070,15 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         accounts: d.accounts.filter((a) => !a.deletedAt),
         assistants: d.assistants.filter((a) => !a.deletedAt),
         reminders: d.reminders.filter((r) => !r.deletedAt),
-        ytLists: d.ytLists.filter((l) => !l.deletedAt),
+        ytLists: d.ytLists.filter((l) => !l.deletedAt)
+          .map((l) => (l.categoryId && st.ytListCats.includes(l.categoryId) ? { ...l, categoryId: null } : l)),
         ytVideos: d.ytVideos.filter((v) => !st.ytVideos.includes(v.id)),
         ytChannels: d.ytChannels.filter((c) => !c.deletedAt),
         ytCats: d.ytCats.filter((c) => !c.deletedAt),
+        ytListCats: (d.ytListCats || []).filter((c) => !c.deletedAt),
+        ytVidCats: (d.ytVidCats || []).filter((c) => !c.deletedAt),
+        ytLooseVideos: (d.ytLooseVideos || []).filter((v) => !v.deletedAt)
+          .map((v) => (v.catId && st.ytVidCats.includes(v.catId) ? { ...v, catId: null } : v)),
       };
     });
     if (st.bookmarks.length) {
@@ -1042,6 +1096,15 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     if (st.ytLists.length) await supabase.from("yt_lists").delete().in("id", st.ytLists);
     if (st.ytChannels.length) await supabase.from("yt_channels").delete().in("id", st.ytChannels);
     if (st.ytCats.length) await supabase.from("yt_categories").delete().in("id", st.ytCats);
+    if (st.ytLooseVideos.length) await supabase.from("yt_loose_videos").delete().in("id", st.ytLooseVideos);
+    if (st.ytListCats.length) {
+      await supabase.from("yt_lists").update({ category_id: null }).in("category_id", st.ytListCats);
+      await supabase.from("yt_list_cats").delete().in("id", st.ytListCats);
+    }
+    if (st.ytVidCats.length) {
+      await supabase.from("yt_loose_videos").update({ cat_id: null }).in("cat_id", st.ytVidCats);
+      await supabase.from("yt_vid_cats").delete().in("id", st.ytVidCats);
+    }
   }, [supabase]);
 
   /* ----- notas: mover al final ----- */
@@ -1297,6 +1360,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     user_id: userId, parent_id: l.parentId, name: l.name, color: l.color,
     icon: l.icon || null, icon_type: l.iconType || "emoji", position: l.order ?? 0,
     is_deleted: !!l.deletedAt, deleted_at: iso(l.deletedAt),
+    category_id: l.categoryId || null,
   });
   const ytVideoRow = (v: T.YtVideo) => ({
     user_id: userId, list_id: v.listId, youtube_id: v.youtubeId, title: v.title,
@@ -1322,7 +1386,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     const l: T.YtList = {
       id: T.uid("yl"), parentId: input.parentId || null, name: input.name || "Nueva lista",
       color: input.color || T.PALETTE[0], icon: input.icon || "", iconType: input.iconType || "emoji",
-      order: 0, deletedAt: null,
+      order: 0, deletedAt: null, categoryId: input.categoryId || null,
     };
     setDb((d) => {
       l.order = T.nextOrder(d.ytLists.filter((x) => (x.parentId || null) === (l.parentId || null)));
@@ -1484,28 +1548,43 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       ytVideos: d.ytVideos.map((v) => (v.youtubeId === youtubeId
         ? { ...v, watched, progressSec: watched ? (v.durationSec || v.progressSec) : 0 }
         : v)),
+      /* v2.4.0: el visto también se sincroniza con los vídeos sueltos */
+      ytLooseVideos: (d.ytLooseVideos || []).map((v) => (v.youtubeId === youtubeId
+        ? { ...v, watched, progressSec: watched ? (v.durationSec || v.progressSec) : 0 }
+        : v)),
     }));
     await supabase.from("yt_videos")
       .update({ watched })
       .eq("user_id", userId).eq("youtube_id", youtubeId);
+    await supabase.from("yt_loose_videos")
+      .update({ watched })
+      .eq("user_id", userId).eq("youtube_id", youtubeId);
     if (!watched) {
       await supabase.from("yt_videos").update({ progress_sec: 0 }).eq("user_id", userId).eq("youtube_id", youtubeId);
+      await supabase.from("yt_loose_videos").update({ progress_sec: 0 }).eq("user_id", userId).eq("youtube_id", youtubeId);
     }
   }, [supabase, userId, setDb]);
 
   const addYtProgress = useCallback(async (youtubeId: string, posSec: number, addSeconds: number) => {
     let sw = 0;
     setDb((d) => {
-      const cur = d.ytVideos.find((v) => v.youtubeId === youtubeId);
+      const cur = d.ytVideos.find((v) => v.youtubeId === youtubeId)
+        || (d.ytLooseVideos || []).find((v) => v.youtubeId === youtubeId);
       sw = (cur ? cur.secondsWatched : 0) + Math.max(0, Math.round(addSeconds));
       return {
         ...d,
         ytVideos: d.ytVideos.map((v) => (v.youtubeId === youtubeId
           ? { ...v, progressSec: Math.max(0, Math.round(posSec)), secondsWatched: sw }
           : v)),
+        ytLooseVideos: (d.ytLooseVideos || []).map((v) => (v.youtubeId === youtubeId
+          ? { ...v, progressSec: Math.max(0, Math.round(posSec)), secondsWatched: sw }
+          : v)),
       };
     });
     await supabase.from("yt_videos")
+      .update({ progress_sec: Math.max(0, Math.round(posSec)), seconds_watched: sw })
+      .eq("user_id", userId).eq("youtube_id", youtubeId);
+    await supabase.from("yt_loose_videos")
       .update({ progress_sec: Math.max(0, Math.round(posSec)), seconds_watched: sw })
       .eq("user_id", userId).eq("youtube_id", youtubeId);
   }, [supabase, userId, setDb]);
@@ -1641,6 +1720,220 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     await Promise.all(list.map((c) => supabase.from("yt_channels").update({ position: c.order }).eq("id", c.id)));
   }, [supabase]);
 
+  /* ================= v2.4.0: categorías de listas ================= */
+  const ytListCatRow = (c: T.YtListCat) => ({
+    user_id: userId, name: c.name, color: c.color, icon: c.icon || null,
+    icon_type: c.iconType || "emoji", position: c.order ?? 0,
+    is_deleted: !!c.deletedAt, deleted_at: iso(c.deletedAt),
+  });
+
+  const createYtListCat = useCallback(async (input: Partial<T.YtListCat>) => {
+    const c: T.YtListCat = {
+      id: T.uid("yc"), name: input.name || "Nueva categoría",
+      color: input.color || T.PALETTE[0], icon: input.icon || "", iconType: input.iconType || "emoji",
+      order: 0, deletedAt: null,
+    };
+    setDb((d) => { c.order = T.nextOrder(d.ytListCats || []); return { ...d, ytListCats: [...(d.ytListCats || []), c] }; });
+    const { data } = await supabase.from("yt_list_cats").insert(ytListCatRow(c)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== c.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, ytListCats: (d.ytListCats || []).map((x) => (x.id === c.id ? { ...x, id: nid } : x)) }));
+      return { ...c, id: nid };
+    }
+    return c;
+  }, [supabase, userId]);
+
+  const saveYtListCat = useCallback(async (c: T.YtListCat) => {
+    setDb((d) => ({ ...d, ytListCats: (d.ytListCats || []).map((x) => (x.id === c.id ? c : x)) }));
+    await supabase.from("yt_list_cats").update(ytListCatRow(c)).eq("id", c.id);
+  }, [supabase, userId]);
+
+  const deleteYtListCat = useCallback(async (id: string) => {
+    /* A la papelera global: las listas conservan su category_id, así que
+       al restaurar la categoría vuelven a aparecer dentro de ella.
+       Mientras tanto se ven en «Sin categoría». */
+    const now = Date.now();
+    setDb((d) => ({ ...d, ytListCats: (d.ytListCats || []).map((c) => (c.id === id ? { ...c, deletedAt: now } : c)) }));
+    await supabase.from("yt_list_cats").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreYtListCat = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytListCats: (d.ytListCats || []).map((c) => (c.id === id ? { ...c, deletedAt: null } : c)) }));
+    await supabase.from("yt_list_cats").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeYtListCat = useCallback(async (id: string) => {
+    setDb((d) => ({
+      ...d,
+      ytListCats: (d.ytListCats || []).filter((c) => c.id !== id),
+      ytLists: d.ytLists.map((l) => (l.categoryId === id ? { ...l, categoryId: null } : l)),
+    }));
+    await supabase.from("yt_lists").update({ category_id: null }).eq("user_id", userId).eq("category_id", id);
+    await supabase.from("yt_list_cats").delete().eq("id", id);
+  }, [supabase, userId, setDb]);
+
+  const reorderYtListCats = useCallback(async (dragId: string, beforeId: string | null) => {
+    let list: T.YtListCat[] = [];
+    setDb((d) => {
+      list = (d.ytListCats || []).filter((c) => !c.deletedAt).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((c) => [c.id, c.order]));
+      return { ...d, ytListCats: (d.ytListCats || []).map((c) => (m.has(c.id) ? { ...c, order: m.get(c.id)! } : c)) };
+    });
+    await Promise.all(list.map((c) => supabase.from("yt_list_cats").update({ position: c.order }).eq("id", c.id)));
+  }, [supabase]);
+
+  const setYtListCategory = useCallback(async (listId: string, catId: string | null) => {
+    let nl: T.YtList | null = null;
+    setDb((d) => {
+      const l = d.ytLists.find((x) => x.id === listId);
+      if (!l) return d;
+      nl = {
+        ...l, categoryId: catId,
+        order: T.nextOrder(d.ytLists.filter((x) => !x.deletedAt && !x.parentId && (x.categoryId || null) === (catId || null))),
+      };
+      return { ...d, ytLists: d.ytLists.map((x) => (x.id === listId ? nl! : x)) };
+    });
+    if (nl) await supabase.from("yt_lists").update({ category_id: catId, position: (nl as T.YtList).order }).eq("id", listId);
+  }, [supabase]);
+
+  /* ================= v2.4.0: categorías de vídeos sueltos ================= */
+  const ytVidCatRow = (c: T.YtVidCat) => ({
+    user_id: userId, name: c.name, color: c.color, icon: c.icon || null,
+    icon_type: c.iconType || "emoji", position: c.order ?? 0,
+    is_deleted: !!c.deletedAt, deleted_at: iso(c.deletedAt),
+  });
+
+  const createYtVidCat = useCallback(async (input: Partial<T.YtVidCat>) => {
+    const c: T.YtVidCat = {
+      id: T.uid("yg"), name: input.name || "Nueva categoría",
+      color: input.color || T.PALETTE[0], icon: input.icon || "", iconType: input.iconType || "emoji",
+      order: 0, deletedAt: null,
+    };
+    setDb((d) => { c.order = T.nextOrder(d.ytVidCats || []); return { ...d, ytVidCats: [...(d.ytVidCats || []), c] }; });
+    const { data } = await supabase.from("yt_vid_cats").insert(ytVidCatRow(c)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== c.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, ytVidCats: (d.ytVidCats || []).map((x) => (x.id === c.id ? { ...x, id: nid } : x)) }));
+      return { ...c, id: nid };
+    }
+    return c;
+  }, [supabase, userId]);
+
+  const saveYtVidCat = useCallback(async (c: T.YtVidCat) => {
+    setDb((d) => ({ ...d, ytVidCats: (d.ytVidCats || []).map((x) => (x.id === c.id ? c : x)) }));
+    await supabase.from("yt_vid_cats").update(ytVidCatRow(c)).eq("id", c.id);
+  }, [supabase, userId]);
+
+  const deleteYtVidCat = useCallback(async (id: string) => {
+    /* A la papelera global: los vídeos conservan su cat_id, así que al
+       restaurar la categoría vuelven a aparecer dentro de ella. */
+    const now = Date.now();
+    setDb((d) => ({ ...d, ytVidCats: (d.ytVidCats || []).map((c) => (c.id === id ? { ...c, deletedAt: now } : c)) }));
+    await supabase.from("yt_vid_cats").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreYtVidCat = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytVidCats: (d.ytVidCats || []).map((c) => (c.id === id ? { ...c, deletedAt: null } : c)) }));
+    await supabase.from("yt_vid_cats").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeYtVidCat = useCallback(async (id: string) => {
+    setDb((d) => ({
+      ...d,
+      ytVidCats: (d.ytVidCats || []).filter((c) => c.id !== id),
+      ytLooseVideos: (d.ytLooseVideos || []).map((v) => (v.catId === id ? { ...v, catId: null } : v)),
+    }));
+    await supabase.from("yt_loose_videos").update({ cat_id: null }).eq("user_id", userId).eq("cat_id", id);
+    await supabase.from("yt_vid_cats").delete().eq("id", id);
+  }, [supabase, userId, setDb]);
+
+  const reorderYtVidCats = useCallback(async (dragId: string, beforeId: string | null) => {
+    let list: T.YtVidCat[] = [];
+    setDb((d) => {
+      list = (d.ytVidCats || []).filter((c) => !c.deletedAt).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((c) => [c.id, c.order]));
+      return { ...d, ytVidCats: (d.ytVidCats || []).map((c) => (m.has(c.id) ? { ...c, order: m.get(c.id)! } : c)) };
+    });
+    await Promise.all(list.map((c) => supabase.from("yt_vid_cats").update({ position: c.order }).eq("id", c.id)));
+  }, [supabase]);
+
+  /* ================= v2.4.0: vídeos sueltos ================= */
+  const ytLooseRow = (v: T.YtLooseVideo) => ({
+    user_id: userId, cat_id: v.catId, youtube_id: v.youtubeId, title: v.title,
+    channel_name: v.channelName || null, thumbnail: v.thumbnail || null,
+    duration_sec: v.durationSec || 0, watched: !!v.watched,
+    progress_sec: v.progressSec || 0, seconds_watched: v.secondsWatched || 0,
+    no_embed: !!v.noEmbed, position: v.order ?? 0,
+    is_deleted: !!v.deletedAt, deleted_at: iso(v.deletedAt),
+  });
+
+  const createYtLooseVideo = useCallback(async (input: Partial<T.YtLooseVideo> & { youtubeId: string }) => {
+    const v: T.YtLooseVideo = {
+      id: T.uid("yv"), catId: input.catId || null, youtubeId: input.youtubeId,
+      title: input.title || "Video de YouTube", channelName: input.channelName || "",
+      thumbnail: input.thumbnail || T.ytThumb(input.youtubeId),
+      durationSec: input.durationSec || 0, watched: !!input.watched,
+      progressSec: input.progressSec || 0, secondsWatched: input.secondsWatched || 0,
+      noEmbed: !!input.noEmbed, order: 0, deletedAt: null,
+    };
+    setDb((d) => {
+      v.order = T.nextOrder((d.ytLooseVideos || []).filter((x) => (x.catId || null) === (v.catId || null)));
+      return { ...d, ytLooseVideos: [...(d.ytLooseVideos || []), v] };
+    });
+    const { data } = await supabase.from("yt_loose_videos").insert(ytLooseRow(v)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== v.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, ytLooseVideos: (d.ytLooseVideos || []).map((x) => (x.id === v.id ? { ...x, id: nid } : x)) }));
+      return { ...v, id: nid };
+    }
+    return v;
+  }, [supabase, userId]);
+
+  const saveYtLooseVideo = useCallback(async (v: T.YtLooseVideo) => {
+    setDb((d) => ({ ...d, ytLooseVideos: (d.ytLooseVideos || []).map((x) => (x.id === v.id ? v : x)) }));
+    await supabase.from("yt_loose_videos").update(ytLooseRow(v)).eq("id", v.id);
+  }, [supabase, userId]);
+
+  const deleteYtLooseVideo = useCallback(async (id: string) => {
+    const now = Date.now();
+    setDb((d) => ({ ...d, ytLooseVideos: (d.ytLooseVideos || []).map((v) => (v.id === id ? { ...v, deletedAt: now } : v)) }));
+    await supabase.from("yt_loose_videos").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreYtLooseVideo = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytLooseVideos: (d.ytLooseVideos || []).map((v) => (v.id === id ? { ...v, deletedAt: null } : v)) }));
+    await supabase.from("yt_loose_videos").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeYtLooseVideo = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, ytLooseVideos: (d.ytLooseVideos || []).filter((v) => v.id !== id) }));
+    await supabase.from("yt_loose_videos").delete().eq("id", id);
+  }, [supabase]);
+
+  const moveYtLooseVideoToCat = useCallback(async (videoId: string, catId: string | null) => {
+    let nv: T.YtLooseVideo | null = null;
+    setDb((d) => {
+      const v = (d.ytLooseVideos || []).find((x) => x.id === videoId);
+      if (!v) return d;
+      nv = { ...v, catId, order: T.nextOrder((d.ytLooseVideos || []).filter((x) => (x.catId || null) === (catId || null))) };
+      return { ...d, ytLooseVideos: (d.ytLooseVideos || []).map((x) => (x.id === videoId ? nv! : x)) };
+    });
+    if (nv) await supabase.from("yt_loose_videos").update({ cat_id: catId, position: (nv as T.YtLooseVideo).order }).eq("id", videoId);
+  }, [supabase]);
+
+  const reorderYtLooseVideos = useCallback(async (catId: string | null, dragId: string, beforeId: string | null) => {
+    let list: T.YtLooseVideo[] = [];
+    setDb((d) => {
+      list = (d.ytLooseVideos || []).filter((v) => !v.deletedAt && (v.catId || null) === (catId || null)).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((v) => [v.id, v.order]));
+      return { ...d, ytLooseVideos: (d.ytLooseVideos || []).map((v) => (m.has(v.id) ? { ...v, order: m.get(v.id)! } : v)) };
+    });
+    await Promise.all(list.map((v) => supabase.from("yt_loose_videos").update({ position: v.order }).eq("id", v.id)));
+  }, [supabase]);
+
   const value: Ctx = {
     userId, db, loading, refresh: load, toasts, toast, openUrl,
     saveSpace, createSpace, trashSpace, restoreSpace, purgeSpace, reorderSpaces,
@@ -1665,6 +1958,9 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     setYtWatched, addYtProgress, importYtVideos,
     createYtCategory, saveYtCategory, deleteYtCategory, restoreYtCategory, purgeYtCategory, reorderYtCategories,
     createYtChannel, saveYtChannel, deleteYtChannel, restoreYtChannel, purgeYtChannel, reorderYtChannels,
+    createYtListCat, saveYtListCat, deleteYtListCat, restoreYtListCat, purgeYtListCat, reorderYtListCats, setYtListCategory,
+    createYtVidCat, saveYtVidCat, deleteYtVidCat, restoreYtVidCat, purgeYtVidCat, reorderYtVidCats,
+    createYtLooseVideo, saveYtLooseVideo, deleteYtLooseVideo, restoreYtLooseVideo, purgeYtLooseVideo, moveYtLooseVideoToCat, reorderYtLooseVideos,
     logActivity, clearActivity, emptyTrash, updateSettings,
   };
 
