@@ -1261,7 +1261,9 @@ function YtListModal({ id, parentId, categoryId }: { id?: string; parentId?: str
       <div className="field"><label>Nombre</label>
         <input type="text" id="mName" ref={nameRef} defaultValue={edit ? edit.name : ""} placeholder="p. ej. Curso de letón" />
       </div>
-      <IconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
+      {/* v2.4.1 (nota 4): las listas también usan el selector con Iconos UI,
+          como las categorías — antes aquí iba el IconPicker de Emoji/Imagen */}
+      <YtCatIconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
         onPick={(v) => { iconRef.current = v; }} />
       <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
       <div className="modal-actions">
@@ -1501,7 +1503,11 @@ function YtVidCatModal({ id }: { id?: string }) {
 function YtLooseVideoModal({ catId }: { catId?: string | null }) {
   const tc = useTC();
   const { closeModal, liveYtVidCats } = useApp();
-  const cat = catId ? liveYtVidCats().find((c) => c.id === catId) : undefined;
+  const cats = liveYtVidCats().sort(T.byOrder);
+  /* v2.4.1 (nota 6): la categoría se elige en el propio modal; viene
+     preseleccionada si se abrió con el ＋ de una categoría. */
+  const [selCat, setSelCat] = useState<string>(catId || "");
+  const selCatObj = cats.find((c) => c.id === selCat);
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [found, setFound] = useState<{ youtubeId: string; title: string; channelName: string } | null>(null);
@@ -1527,18 +1533,18 @@ function YtLooseVideoModal({ catId }: { catId?: string | null }) {
     if (!yid) { tc.toast("Pega una URL de video de YouTube válida"); return; }
     const manual = titleRef.current?.value.trim() || "";
     await tc.createYtLooseVideo({
-      catId: catId || null, youtubeId: yid,
+      catId: selCat || null, youtubeId: yid,
       title: manual || (found ? found.title : "") || "Video de YouTube",
       channelName: found ? found.channelName : "",
       thumbnail: T.ytThumb(yid),
     });
-    tc.toast("Video suelto añadido" + (cat ? " a «" + cat.name + "»" : ""));
+    tc.toast("Video suelto añadido" + (selCatObj ? " a «" + selCatObj.name + "»" : ""));
     closeModal();
   };
 
   return (
     <ModalShell>
-      <h3>🎞️ Añadir video suelto{cat ? " a «" + cat.name + "»" : ""}</h3>
+      <h3>🎞️ Añadir video suelto</h3>
       <div className="field"><label>URL del video de YouTube</label>
         <input type="url" placeholder="https://www.youtube.com/watch?v=…" autoComplete="off" spellCheck={false}
           value={url}
@@ -1558,6 +1564,12 @@ function YtLooseVideoModal({ catId }: { catId?: string | null }) {
       ) : null}
       <div className="field"><label>Título (solo si quieres cambiarlo)</label>
         <input type="text" ref={titleRef} placeholder={found ? found.title : "Título del video"} />
+      </div>
+      <div className="field"><label>Guardar en la categoría</label>
+        <select value={selCat} onChange={(e) => setSelCat(e.target.value)}>
+          {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="">Sin clasificar</option>
+        </select>
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={closeModal}>Cancelar</button>

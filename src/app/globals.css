@@ -1241,8 +1241,11 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .yt-row-thumb img { width: 118px; height: 66px; object-fit: cover; border-radius: 8px; display: block; }
 
 /* Tablero de Youtube Manager */
-.yt-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; align-items: start; margin-top: 14px; }
-.yt-col { background: var(--card-2); border: 1px solid var(--border); border-radius: 14px; padding: 12px; min-height: 200px; }
+/* v2.4.1 (nota 1): minmax(0,1fr) — con 1fr a secas el mínimo automático es
+   el contenido, y una columna con tarjetas anchas empujaba a las demás y
+   cortaba la última. Ahora todas las columnas miden exactamente lo mismo. */
+.yt-board { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; margin-top: 14px; }
+.yt-col { background: var(--card-2); border: 1px solid var(--border); border-radius: 14px; padding: 12px; min-height: 200px; min-width: 0; }
 .yt-col.drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
 .yt-col h4 { font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 10px; display: flex; justify-content: space-between; }
 .yt-col .yt-vcard, .yt-col .yt-lcard { margin-bottom: 12px; }
@@ -1273,9 +1276,16 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .yt-cat-empty { color: var(--muted); font-size: 12.5px; padding: 4px 2px 10px; }
 .yt-chgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .yt-chgrid.zoomable { grid-template-columns: repeat(auto-fill, minmax(calc(250px * var(--cardzoom, 1)), 1fr)); }
-.yt-board.c2 { grid-template-columns: repeat(2, 1fr); }
-.yt-board.c1 { grid-template-columns: 1fr; }
+.yt-board.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.yt-board.c1 { grid-template-columns: minmax(0, 1fr); }
 .yt-board-cats { grid-template-columns: repeat(auto-fill, minmax(calc(250px * var(--cardzoom, 1)), 1fr)); }
+/* v2.4.1 (nota 5): Tablero de Vídeos sueltos — las columnas de categoría son
+   anchas a propósito y dentro las tarjetas van una al lado de la otra en
+   rejilla, en vez de una sola columna larguísima e impracticable. */
+.yt-board.yt-board-loose { grid-template-columns: repeat(auto-fill, minmax(min(calc(470px * var(--cardzoom, 1)), 100%), 1fr)); }
+.yt-loose-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(158px * var(--cardzoom, 1)), 1fr)); gap: 10px; }
+.yt-loose-grid .yt-loose-mini { margin-bottom: 0; }
+.yt-loose-grid .yt-vcard { height: 100%; }
 .yt-col.drop-target { box-shadow: inset 0 0 0 2px var(--accent); }
 .yt-col .yt-cat-h { margin: 0 0 10px; font-size: 14.5px; }
 .yt-chcard.yt-mini { padding: 8px 10px; gap: 9px; margin-bottom: 10px; }
@@ -1292,6 +1302,31 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .yt-chsub { color: var(--muted); font-size: 12.3px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .yt-chactions { display: flex; gap: 2px; opacity: 0; }
 .yt-chcard:hover .yt-chactions { opacity: 1; }
+
+/* v2.4.1 (nota 7): el icono de la categoría de Suscripciones es el botón
+   que abre su página propia */
+.yt-cat-open { cursor: pointer; display: inline-flex; align-items: center; border-radius: 7px; padding: 1px 2px; flex: 0 0 auto; }
+.yt-cat-open:hover { background: var(--card); box-shadow: inset 0 0 0 1px var(--border); }
+
+/* v2.4.1 (nota 2): Home de bienvenida estilo Workspace */
+.welcome { max-width: 920px; margin: 30px auto 0; padding: 0 6px; }
+.welcome-h { font-size: 30px; font-weight: 800; }
+.welcome-accent { color: #6d4ee0; }
+.welcome-lead { color: var(--muted); font-size: 15px; line-height: 1.55; margin-top: 10px; max-width: 640px; }
+.welcome-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin-top: 26px; }
+.welcome-card { background: var(--card); border: 1px solid var(--border); border-top: 4px solid #2f6fed; border-radius: 16px; padding: 24px 22px; cursor: pointer; transition: box-shadow .15s, transform .15s; }
+.welcome-card:hover { box-shadow: 0 10px 26px rgba(25,40,80,.13); transform: translateY(-2px); }
+.welcome-card.wc-orange { border-top-color: #e8912d; }
+.welcome-card.wc-red { border-top-color: #e5484d; }
+.welcome-ic { width: 52px; height: 52px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 26px; background: var(--card-2); }
+.welcome-card h3 { font-size: 17.5px; margin-top: 14px; }
+.welcome-card p { color: var(--muted); font-size: 13.5px; line-height: 1.5; margin-top: 7px; }
+.welcome-open { color: #2f6fed; font-weight: 700; font-size: 13.5px; margin-top: 10px; display: inline-block; }
+.welcome-card.wc-orange .welcome-open { color: #e8912d; }
+.welcome-card.wc-red .welcome-open { color: #e5484d; }
+.welcome-count { display: block; color: var(--muted); font-size: 12px; margin-top: 8px; }
+.welcome-strip { margin-top: 22px; background: var(--card-2); border: 1px solid var(--border); border-radius: 14px; padding: 15px 20px; font-size: 13.5px; color: var(--muted); line-height: 1.55; }
+@media (max-width: 900px) { .welcome-cards { grid-template-columns: 1fr; } }
 
 /* Modal: video encontrado */
 .yt-found { display: flex; gap: 12px; align-items: center; background: var(--card-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin-bottom: 12px; }

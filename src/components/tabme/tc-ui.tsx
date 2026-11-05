@@ -18,6 +18,7 @@ export type UiState = {
   remindersTab: string;
   trashTab: string;
   ytListId: string | null;
+  ytSubCatId: string | null;
 };
 export type ModalState = { kind: string; props?: any } | null;
 
@@ -32,6 +33,7 @@ type AppCtx = {
   /* youtube manager */
   goYt: (view: string) => void;
   goYtList: (id: string) => void;
+  goYtSubCat: (id: string | null) => void;
   liveYtLists: () => T.YtList[];
   liveYtVideos: () => T.YtVideo[];
   liveYtCats: () => T.YtCategory[];
@@ -198,8 +200,11 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     });
   }, [tc, ui]);
 
+  /* v2.4.1 (nota 2): «Home» es ahora la pantalla de bienvenida con las
+     tarjetas de los bloques; la vista de Spaces sigue en view "home" y se
+     entra desde su tarjeta. */
   const goHome = useCallback(() => {
-    const p = { view: "home", folderId: null, tag: null, notes: false } as Partial<UiState>;
+    const p = { view: "welcome", folderId: null, tag: null, notes: false } as Partial<UiState>;
     persistSelection(p); setUi(p);
   }, [persistSelection, setUi]);
   const goSpace = useCallback((spaceId: string) => {
@@ -224,6 +229,12 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
   }, [setUi]);
   const goYtList = useCallback((id: string) => {
     setUi({ view: "ytlist", ytListId: id, notes: false, tag: null, folderId: null } as Partial<UiState>);
+    const main = document.getElementById("main"); if (main) main.scrollTop = 0;
+  }, [setUi]);
+  /* v2.4.1 (nota 7): abrir una categoría de Suscripciones en su propia
+     página ("__none" = la sección Sin categoría). */
+  const goYtSubCat = useCallback((id: string | null) => {
+    setUi({ view: "ytsubcat", ytSubCatId: id, notes: false, tag: null, folderId: null } as Partial<UiState>);
     const main = document.getElementById("main"); if (main) main.scrollTop = 0;
   }, [setUi]);
 
@@ -304,7 +315,7 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
 
   const value: AppCtx = {
     ui, setUi, goHome, goSpace, goFolder, goItem, goTag,
-    goYt, goYtList, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels,
+    goYt, goYtList, goYtSubCat, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels,
     liveYtListCats, liveYtVidCats, liveYtLooseVideos, ytListById,
     ytPlayer, playYt, playLoose, stopYt,
     modal, openModal, closeModal, openDd, setOpenDd,

@@ -7,7 +7,7 @@ import * as T from "@/lib/tc";
 import { useTC } from "@/lib/tc-store";
 import { useApp, useDnD } from "./tc-ui";
 import { NotePopover } from "./NotesView";
-import { YtListsView, YtListView, YtSubsView, YtDoneView, YtLooseView } from "./YoutubeViews";
+import { YtListsView, YtListView, YtSubsView, YtSubCatView, YtDoneView, YtLooseView } from "./YoutubeViews";
 
 type DragState = { type: string; id: string } | null;
 
@@ -415,6 +415,49 @@ function Endzone({ kind, want, dragRef, onDropId }:
 }
 
 /* ---------- Vistas ---------- */
+
+/* v2.4.1 (nota 2): Home de bienvenida estilo Workspace — la app arranca
+   aquí; cada tarjeta entra en su bloque, que funciona como siempre. */
+function WelcomeView() {
+  const { setUi, goItem, goYt, liveSpaces, liveBookmarks, liveYtLists, liveYtChannels, itemCount } = useApp();
+  const nSpaces = liveSpaces().length;
+  const nBm = liveBookmarks().length;
+  const nLists = liveYtLists().filter((l) => !l.parentId).length;
+  const nCh = liveYtChannels().length;
+  return (
+    <div className="welcome">
+      <h1 className="welcome-h">Tu BookDPB en <span className="welcome-accent">un solo lugar</span> 📚</h1>
+      <p className="welcome-lead">Tres bloques que ya usas, una sola app. Cada bloque guarda sus datos por separado: nada se mezcla, nada se rompe.</p>
+      <div className="welcome-cards">
+        <div className="welcome-card wc-blue" role="button" tabIndex={0}
+          onClick={() => setUi({ view: "home", notes: false, tag: null, folderId: null })}>
+          <div className="welcome-ic">📚</div>
+          <h3>Spaces</h3>
+          <p>Tus espacios y marcadores: carpetas, enlaces y notas, ordenados como siempre.</p>
+          <span className="welcome-open">Abrir →</span>
+          <span className="welcome-count">{nSpaces} space(s) · {nBm} marcador(es)</span>
+        </div>
+        <div className="welcome-card wc-orange" role="button" tabIndex={0}
+          onClick={() => goItem("misitems")}>
+          <div className="welcome-ic">📒</div>
+          <h3>Mis Items</h3>
+          <p>Cuentas, recordatorios, favoritos, historial y la papelera única de toda la app.</p>
+          <span className="welcome-open">Abrir →</span>
+          <span className="welcome-count">{itemCount("accounts")} cuenta(s) · {itemCount("reminders")} recordatorio(s) pendiente(s)</span>
+        </div>
+        <div className="welcome-card wc-red" role="button" tabIndex={0}
+          onClick={() => goYt("ytlists")}>
+          <div className="welcome-ic">▶️</div>
+          <h3>Youtube Manager</h3>
+          <p>Listas, vídeos sueltos, suscripciones y completadas: tus cursos y vídeos de YouTube.</p>
+          <span className="welcome-open">Abrir →</span>
+          <span className="welcome-count">{nLists} lista(s) · {nCh} canal(es)</span>
+        </div>
+      </div>
+      <div className="welcome-strip">💡 Esta pantalla es solo la puerta de entrada: dentro, cada bloque funciona igual que siempre. Vuelve aquí cuando quieras con el botón 🏠 Home de la barra lateral.</div>
+    </div>
+  );
+}
 
 function HomeView({ dragRef }: { dragRef: React.MutableRefObject<DragState> }) {
   const tc = useTC();
@@ -1370,7 +1413,8 @@ export function Views() {
 
   const v = ui.view;
   let body: React.ReactNode = null;
-  if (v === "home") body = <HomeView dragRef={dragRef} />;
+  if (v === "welcome") body = <WelcomeView />;
+  else if (v === "home") body = <HomeView dragRef={dragRef} />;
   else if (v === "all") body = <AllView dragRef={dragRef} />;
   else if (v === "folder") body = <FolderView dragRef={dragRef} />;
   else if (v === "tag") body = <TagView dragRef={dragRef} />;
@@ -1385,6 +1429,7 @@ export function Views() {
   else if (v === "ytlists") body = <YtListsView />;
   else if (v === "ytlist") body = <YtListView />;
   else if (v === "ytsubs") body = <YtSubsView />;
+  else if (v === "ytsubcat") body = <YtSubCatView />;
   else if (v === "ytdone") body = <YtDoneView />;
   else if (v === "ytloose") body = <YtLooseView />;
 

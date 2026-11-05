@@ -35,9 +35,9 @@ const YT_DEFS: Record<string, { label: string; icon: string; hint: string }> = {
 const HELP_KINDS = ["guide", "shortcuts", "changelog", "feedback", "spacepick", "itempick"];
 
 const INITIAL_UI: UiState = {
-  view: "home", spaceId: null, folderId: null, tag: null, notes: false,
+  view: "welcome", spaceId: null, folderId: null, tag: null, notes: false,
   notesTab: "all", notesQuery: "", histFilter: "all",
-  remindersTab: "all", trashTab: "all", ytListId: null,
+  remindersTab: "all", trashTab: "all", ytListId: null, ytSubCatId: null,
 };
 
 export function TabmeApp({ userId }: { userId: string }) {
@@ -642,7 +642,7 @@ function NewFolderBtn() {
   const newFolderFlow = () => {
     if (ui.folderId) { openModal("folder", { id: null, parentId: ui.folderId }); return; }
     const spaces = liveSpaces();
-    if (ui.view === "home" || !ui.spaceId || !spaces.find((s) => s.id === ui.spaceId)) {
+    if (ui.view === "home" || ui.view === "welcome" || !ui.spaceId || !spaces.find((s) => s.id === ui.spaceId)) {
       if (!spaces.length) { tc.toast("Primero crea un space"); return; }
       if (spaces.length === 1) { openModal("folder", { id: null, parentId: null, spaceId: spaces[0].id }); return; }
       openModal("spacepick");
@@ -784,7 +784,7 @@ function HelpMenu() {
 
 function HomeButton() {
   const { ui, goHome } = useApp();
-  const active = ui.view === "home" && !ui.notes;
+  const active = ui.view === "welcome" && !ui.notes;
   return (
     <div className="side-block home-block">
       <button className={"link-btn" + (active ? " active" : "")} onClick={goHome} title="Inicio">
@@ -1220,7 +1220,7 @@ function YoutubeSec() {
     return 0;
   };
   const active = (key: string) =>
-    ui.view === key || (key === "ytlists" && ui.view === "ytlist");
+    ui.view === key || (key === "ytlists" && ui.view === "ytlist") || (key === "ytsubs" && ui.view === "ytsubcat");
 
   return (
     <SecShell secKey="youtube" className="side-section sec-card sec-youtube">
@@ -1516,7 +1516,16 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.4.0</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.4.1</h3><ul>
+          <li>🏠 <b>Home de bienvenida</b>: la app arranca en una pantalla estilo tu Workspace — título y tres tarjetas grandes (SPACES, MIS ITEMS y YOUTUBE MANAGER) con su «Abrir →». El botón 🏠 Home lleva ahí; dentro, cada bloque funciona como siempre.</li>
+          <li>▦ <b>Columnas del Tablero, todas iguales</b>: las columnas de Listas salían con tamaños distintos y la última quedaba cortada; ahora miden exactamente lo mismo.</li>
+          <li>🏁 <b>Las completadas ya no están en Listas</b>: una playlist al 100% solo sale en su sección Completadas (o si la buscas). El Tablero se queda con Sin empezar y En curso.</li>
+          <li>🔷 <b>Iconos UI también en las listas</b>: el modal de lista ya trae Emoji / Iconos UI / Imagen, como las categorías.</li>
+          <li>🎞️ <b>Vídeos sueltos sin columna interminable</b>: en el Tablero, las tarjetas de cada categoría van una al lado de la otra en rejilla.</li>
+          <li>➕ <b>Añadir vídeo suelto eligiendo categoría</b>: el modal trae «Guardar en la categoría» para que entre directo donde digas.</li>
+          <li>📡 <b>Suscripciones</b>: clic en el icono de una categoría y se abre su página propia, solo con esa categoría y sus canales (el nombre y la flecha siguen plegando).</li>
+          <li>⚙️ Sin SQL nuevo: solo cambia la presentación y la navegación; tus datos no se tocan.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.4.0</h4><ul>
           <li>🗂️ <b>Categorías de listas</b>: en Youtube Manager → Listas ya no se mezclan todas — crea categorías por temas (Letón, Aviación, Cursos…) y arrastra cada lista a la suya. Van una al lado de la otra y cada una se pliega/despliega por su cuenta (se recuerda entre dispositivos). Al crear una categoría: nombre, color y <b>Emoji, Iconos UI o Imagen</b>.</li>
           <li>🎞️ <b>Vídeos sueltos</b>: nueva fila en YOUTUBE MANAGER para los vídeos que no pertenecen a ninguna lista. Se organizan en categorías que son spaces de vídeos: crea la categoría, añade vídeos uno a uno con su enlace y reprodúcelos con el reproductor de siempre (la cola es la categoría). El visto se sincroniza con las listas, como siempre.</li>
           <li>🧩 <b>Sidebar en tarjetas</b>: SPACES (azul), MIS ITEMS (naranja) y YOUTUBE MANAGER (rojo) van ahora cada uno en su propio cuadro, plegables por su cuenta — SPACES también se pliega entero — y se siguen pudiendo reordenar arrastrando.</li>

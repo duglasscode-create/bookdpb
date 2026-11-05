@@ -365,10 +365,14 @@ export function YtListsView() {
   const { getViewMode, liveYtLists, liveYtVideos, liveYtListCats, openModal } = useApp();
   const dragRef = useRef<DragState>(null);
   const mode = getViewMode("ytlists");
-  const tops = liveYtLists().filter((l) => !l.parentId).sort(T.byOrder);
+  const topsAll = liveYtLists().filter((l) => !l.parentId).sort(T.byOrder);
   const cats = liveYtListCats().sort(T.byOrder);
   const allVideos = liveYtVideos();
   const g = ytListStats(allVideos);
+  /* v2.4.1 (nota 3): las listas completadas ya no se muestran en Listas;
+     viven solo en la vista Completadas. */
+  const tops = topsAll.filter((l) => !ytListDone(l, allVideos));
+  const nDone = topsAll.length - tops.length;
 
   const sections: { cat: T.YtListCat | null; items: T.YtList[] }[] =
     cats.map((c) => ({ cat: c, items: tops.filter((l) => l.categoryId === c.id) }));
@@ -461,25 +465,31 @@ export function YtListsView() {
   );
 
   let body: React.ReactNode;
-  if (!tops.length && !cats.length) {
+  if (!topsAll.length && !cats.length) {
     body = <YtEmpty icon="🎬" lines={[
       "Todavía no tienes listas de YouTube.",
       "Crea la primera con «＋ Nueva lista», o importa una playlist entera de YouTube.",
     ]} />;
+  } else if (!tops.length && !cats.length) {
+    body = <YtEmpty icon="🏁" lines={[
+      "Todas tus listas están completadas.",
+      "Están guardadas en YOUTUBE MANAGER → Completadas.",
+    ]} />;
   } else if (mode === "board") {
+    /* v2.4.1 (notas 1 y 3): solo Sin empezar / En curso, dos columnas del
+       mismo ancho (clase c2 + minmax(0,1fr) en CSS). Las completadas ya
+       no tienen columna aquí. */
     const cols: { key: string; label: string; items: T.YtList[] }[] = [
       { key: "none", label: "Sin empezar", items: [] },
       { key: "part", label: "En curso", items: [] },
-      { key: "done", label: "🏁 Completadas", items: [] },
     ];
     tops.forEach((l) => {
       const vs = allVideos.filter((v) => v.listId === l.id);
-      if (ytListDone(l, allVideos)) cols[2].items.push(l);
-      else if (vs.some((v) => v.watched || v.progressSec > 0)) cols[1].items.push(l);
+      if (vs.some((v) => v.watched || v.progressSec > 0)) cols[1].items.push(l);
       else cols[0].items.push(l);
     });
     body = (
-      <div className="yt-board">
+      <div className="yt-board c2">
         {cols.map((c) => (
           <div key={c.key} className="yt-col">
             <h4>{c.label}<span>{c.items.length}</span></h4>
@@ -533,6 +543,7 @@ export function YtListsView() {
       <YtHead vkey="ytlists" primary={primary}
         titleNode={<YtCrumbs trail={[{ label: <>🎬 Listas</> }]} />}
         subline={tops.length + " lista(s) en " + cats.length + " categoría(s) · " + g.total + " video(s) · " + g.watched + " visto(s)" +
+          (nDone ? " · 🏁 " + nDone + " completada(s) en Completadas" : "") +
           (g.invested ? " · ⏳ Tiempo invertido: " + T.fmtInvested(g.invested) : "") +
           " · Arrastra una lista a otra categoría para moverla"} />
       {body}
@@ -724,7 +735,7 @@ function YtVideoEndzone({ listId, dragRef, grid }: { listId: string; dragRef: Re
 
 export function YtSubsView() {
   const tc = useTC();
-  const { getViewMode, liveYtCats, liveYtChannels, liveYtVideos, openModal } = useApp();
+  const { getViewMode, liveYtCats, liveYtChannels, liveYtVideos, openModal, goYtSubCat } = useApp();
   const dragRef = useRef<DragState>(null);
   const mode = getViewMode("ytsubs");
   const cats = liveYtCats().sort(T.byOrder);
@@ -798,7 +809,11 @@ export function YtSubsView() {
   const catHeader = (cat: T.YtCategory | null, items: T.YtChannel[], tog?: boolean) => (
     <div className="yt-cat-h" draggable={!!cat} data-cathead={cat ? cat.id : ""}
       onClick={(e) => {
-        if (tog && (e.target as HTMLElement).closest("[data-tog]")) toggleCat(cat);
+        const t = e.target as HTMLElement;
+        /* v2.4.1 (nota 7): clic en el icono ABRE la categoría en su página,
+           en vez de desplegarla aquí. El nombre/flecha siguen plegando. */
+        if (t.closest("[data-open]")) { goYtSubCat(cat ? cat.id : "__none"); return; }
+        if (tog && t.closest("[data-tog]")) toggleCat(cat);
       }}
       onDragStart={(e) => {
         if (!cat) return;
@@ -826,7 +841,9 @@ export function YtSubsView() {
           {isCollapsed(cat) ? "▸" : "▾"}</span>
       ) : null}
       <span className="yt-cat-grip" title="Arrastra para reordenar la categoría">⠿</span>
-      {cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🗂️</span>}
+      <span className="yt-cat-open" data-open="1" title="Abrir categoría: ver solo esta categoría">
+        {cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🗂️</span>}
+      </span>
       <span data-tog={tog ? "1" : undefined} style={tog ? { cursor: "pointer" } : undefined}>{cat ? cat.name : "Sin categoría"}</span>
       <span className="yt-cat-count">{items.length}</span>
       {cat ? (
@@ -898,9 +915,62 @@ export function YtSubsView() {
     <>
       <YtHead vkey="ytsubs"
         titleNode={<YtCrumbs trail={[{ label: <>📡 Suscripciones</> }]} />}
-        subline={channels.length + " canal(es) en " + cats.length + " categoría(s) · Clic en una categoría para plegarla · Arrastra un canal a otra categoría para moverlo"}
+        subline={channels.length + " canal(es) en " + cats.length + " categoría(s) · Clic en el icono de una categoría para abrirla · Clic en el nombre para plegarla · Arrastra un canal a otra categoría para moverlo"}
         primary={<>
           <button className="btn" onClick={() => openModal("ytcat", {})}>＋ Nueva categoría</button>
+          <button className="btn primary" onClick={() => openModal("ytchannel", {})}>＋ Nuevo canal</button>
+        </>} />
+      {body}
+    </>
+  );
+}
+
+/* v2.4.1 (nota 7): página propia de una categoría de Suscripciones —
+   solo esa categoría y sus canales, sin las demás alrededor. */
+export function YtSubCatView() {
+  const { ui, getViewMode, liveYtCats, liveYtChannels, liveYtVideos, goYt, openModal } = useApp();
+  const dragRef = useRef<DragState>(null);
+  const mode = getViewMode("ytsubcat");
+  const cats = liveYtCats().sort(T.byOrder);
+  const id = ui.ytSubCatId;
+  const cat = id && id !== "__none" ? cats.find((c) => c.id === id) : null;
+  const channels = liveYtChannels().sort(T.byOrder);
+  const items = channels.filter((ch) => cat
+    ? ch.categoryId === cat.id
+    : (!ch.categoryId || !cats.find((c) => c.id === ch.categoryId)));
+  const videos = liveYtVideos();
+  const videosOfChannel = (name: string) => videos.filter((v) => v.channelName && v.channelName === name).length;
+
+  let body: React.ReactNode;
+  if (!items.length) {
+    body = <YtEmpty icon="📡" lines={[
+      "Esta categoría todavía no tiene canales.",
+      "Desde Suscripciones puedes arrastrar canales a esta categoría.",
+    ]} />;
+  } else if (mode === "list") {
+    body = (
+      <div className="view-list zoomable">
+        {items.map((ch) => <YtChannelRow key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />)}
+      </div>
+    );
+  } else {
+    body = (
+      <div className="yt-chgrid zoomable">
+        {items.map((ch) => <YtChannelCard key={ch.id} ch={ch} nVideos={videosOfChannel(ch.name)} dragRef={dragRef} />)}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <YtHead vkey="ytsubcat"
+        titleNode={<YtCrumbs trail={[
+          { label: <>📡 Suscripciones</>, go: () => goYt("ytsubs") },
+          { label: <>{cat ? <YtIconEl icon={cat.icon} iconType={cat.iconType} size={20} /> : <span style={{ fontSize: 17 }}>🗂️</span>} {cat ? cat.name : "Sin categoría"}</> },
+        ]} />}
+        subline={"Solo esta categoría · " + items.length + " canal(es)"}
+        primary={<>
+          <button className="btn" onClick={() => goYt("ytsubs")}>← Volver a Suscripciones</button>
           <button className="btn primary" onClick={() => openModal("ytchannel", {})}>＋ Nuevo canal</button>
         </>} />
       {body}
@@ -1308,15 +1378,19 @@ export function YtLooseView() {
     ]} />;
   } else if (mode === "board") {
     body = (
-      <div className="yt-board yt-board-cats">
+      <div className="yt-board yt-board-cats yt-board-loose">
         {sections.map(({ cat, items }) => (
           <div key={cat ? cat.id : "none"} className={"yt-col" + (isCollapsed(cat) ? " yt-col-collapsed" : "")} data-cat={cat ? cat.id : ""}
             onDragOver={overCat} onDragLeave={(e) => (e.currentTarget as HTMLElement).classList.remove("drop-target")}
             onDrop={dropOnCat(cat)}>
             {catHeader(cat, items)}
-            {isCollapsed(cat) ? null : items.map((v) => (
-              <div key={v.id} className="yt-loose-mini"><YtLooseCard v={v} dragRef={dragRef} /></div>
-            ))}
+            {isCollapsed(cat) ? null : (
+              <div className="yt-loose-grid">
+                {items.map((v) => (
+                  <div key={v.id} className="yt-loose-mini"><YtLooseCard v={v} dragRef={dragRef} /></div>
+                ))}
+              </div>
+            )}
             {isCollapsed(cat) || items.length ? null : <div className="yt-col-empty">Sin vídeos aquí — arrastra uno</div>}
           </div>
         ))}
