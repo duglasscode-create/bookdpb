@@ -65,6 +65,18 @@ export type YtVideo = {
   watched: boolean; progressSec: number; secondsWatched: number; noEmbed: boolean;
   order: number; deletedAt: number | null;
 };
+/* v2.5.0: bloque Hábitos — rutina diaria con días marcados, tiempo
+   registrado (cronómetro propio o tiempo de vídeo de la categoría de
+   listas vinculada) y estadísticas por periodos. */
+export type Habit = {
+  id: string; name: string; color: string; icon: string; iconType: string;
+  note: string; ytLinkCat: string | null; archived: boolean;
+  order: number; deletedAt: number | null;
+};
+/* Un día de un hábito: hecho o no, y los segundos registrados ese día */
+export type HabitDay = {
+  habitId: string; day: string; done: boolean; seconds: number;
+};
 export type YtCategory = {
   id: string; name: string; color: string; icon: string; iconType: string;
   order: number; deletedAt: number | null;
@@ -92,6 +104,7 @@ export type DB = {
   activity: Activity[]; settings: Settings;
   ytLists: YtList[]; ytVideos: YtVideo[]; ytCats: YtCategory[]; ytChannels: YtChannel[];
   ytListCats: YtListCat[]; ytVidCats: YtVidCat[]; ytLooseVideos: YtLooseVideo[];
+  habits: Habit[]; habitDays: HabitDay[];
 };
 
 /* ---------- Constantes literales del original ---------- */
@@ -132,6 +145,7 @@ export const DT_YTSEC = 'application/x-tbc-ytsec';
 export const DT_YTLISTCAT = 'application/x-tbc-ytlistcat';
 export const DT_YTVIDCAT = 'application/x-tbc-ytvidcat';
 export const DT_YTLOOSE = 'application/x-tbc-ytloose';
+export const DT_HABIT = 'application/x-tbc-habit';
 
 /* Iconos UI (línea) para las categorías de Youtube Manager (v2.4.0).
    Se guardan como iconType "ui" + icon = id de esta lista. */

@@ -19,6 +19,8 @@ export type UiState = {
   trashTab: string;
   ytListId: string | null;
   ytSubCatId: string | null;
+  ytListCatId: string | null;
+  ytVidCatId: string | null;
 };
 export type ModalState = { kind: string; props?: any } | null;
 
@@ -34,6 +36,9 @@ type AppCtx = {
   goYt: (view: string) => void;
   goYtList: (id: string) => void;
   goYtSubCat: (id: string | null) => void;
+  goYtListCat: (id: string | null) => void;
+  goYtVidCat: (id: string | null) => void;
+  liveHabits: () => T.Habit[];
   liveYtLists: () => T.YtList[];
   liveYtVideos: () => T.YtVideo[];
   liveYtCats: () => T.YtCategory[];
@@ -237,6 +242,17 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     setUi({ view: "ytsubcat", ytSubCatId: id, notes: false, tag: null, folderId: null } as Partial<UiState>);
     const main = document.getElementById("main"); if (main) main.scrollTop = 0;
   }, [setUi]);
+  /* v2.5.0: abrir una categoría de Listas o de Vídeos sueltos en su
+     propia página ("__none" = Sin categoría / Sin clasificar). */
+  const goYtListCat = useCallback((id: string | null) => {
+    setUi({ view: "ytlistcat", ytListCatId: id, notes: false, tag: null, folderId: null } as Partial<UiState>);
+    const main = document.getElementById("main"); if (main) main.scrollTop = 0;
+  }, [setUi]);
+  const goYtVidCat = useCallback((id: string | null) => {
+    setUi({ view: "ytvidcat", ytVidCatId: id, notes: false, tag: null, folderId: null } as Partial<UiState>);
+    const main = document.getElementById("main"); if (main) main.scrollTop = 0;
+  }, [setUi]);
+  const liveHabits = useCallback(() => (db.habits || []).filter((h) => !h.deletedAt), [db]);
 
   const trashEntries = useCallback(() => {
     const out: { kind: string; label: string; icon: string; id: string; name: string; deletedAt: number }[] = [];
@@ -255,6 +271,7 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     push("ytlistcats", "Categoría de listas", "🗂️", db.ytListCats || [], (x) => x.name);
     push("ytvidcats", "Categoría de vídeos", "🎞️", db.ytVidCats || [], (x) => x.name);
     push("ytloose", "Video suelto", "🎞️", db.ytLooseVideos || [], (x) => x.title);
+    push("habits", "Hábito", "🌱", db.habits || [], (x) => x.name);
     return out.sort((a, b) => b.deletedAt - a.deletedAt);
   }, [db]);
 
@@ -315,7 +332,7 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
 
   const value: AppCtx = {
     ui, setUi, goHome, goSpace, goFolder, goItem, goTag,
-    goYt, goYtList, goYtSubCat, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels,
+    goYt, goYtList, goYtSubCat, goYtListCat, goYtVidCat, liveHabits, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels,
     liveYtListCats, liveYtVidCats, liveYtLooseVideos, ytListById,
     ytPlayer, playYt, playLoose, stopYt,
     modal, openModal, closeModal, openDd, setOpenDd,

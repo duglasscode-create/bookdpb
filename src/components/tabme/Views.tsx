@@ -7,7 +7,8 @@ import * as T from "@/lib/tc";
 import { useTC } from "@/lib/tc-store";
 import { useApp, useDnD } from "./tc-ui";
 import { NotePopover } from "./NotesView";
-import { YtListsView, YtListView, YtSubsView, YtSubCatView, YtDoneView, YtLooseView } from "./YoutubeViews";
+import { YtListsView, YtListView, YtListCatView, YtSubsView, YtSubCatView, YtDoneView, YtLooseView, YtVidCatView } from "./YoutubeViews";
+import { HabitsView } from "./HabitsView";
 
 type DragState = { type: string; id: string } | null;
 
@@ -419,15 +420,19 @@ function Endzone({ kind, want, dragRef, onDropId }:
 /* v2.4.1 (nota 2): Home de bienvenida estilo Workspace — la app arranca
    aquí; cada tarjeta entra en su bloque, que funciona como siempre. */
 function WelcomeView() {
-  const { setUi, goItem, goYt, liveSpaces, liveBookmarks, liveYtLists, liveYtChannels, itemCount } = useApp();
+  const tc = useTC();
+  const { setUi, goItem, goYt, liveSpaces, liveBookmarks, liveYtLists, liveYtChannels, itemCount, liveHabits } = useApp();
   const nSpaces = liveSpaces().length;
   const nBm = liveBookmarks().length;
   const nLists = liveYtLists().filter((l) => !l.parentId).length;
   const nCh = liveYtChannels().length;
+  const habits = liveHabits().filter((h) => !h.archived);
+  const todayK = T.localDStr(new Date());
+  const doneToday = habits.filter((h) => (tc.db.habitDays || []).some((r) => r.habitId === h.id && r.day === todayK && r.done)).length;
   return (
     <div className="welcome">
       <h1 className="welcome-h">Tu BookDPB en <span className="welcome-accent">un solo lugar</span> 📚</h1>
-      <p className="welcome-lead">Tres bloques que ya usas, una sola app. Cada bloque guarda sus datos por separado: nada se mezcla, nada se rompe.</p>
+      <p className="welcome-lead">Cuatro bloques, una sola app. Cada bloque guarda sus datos por separado: nada se mezcla, nada se rompe.</p>
       <div className="welcome-cards">
         <div className="welcome-card wc-blue" role="button" tabIndex={0}
           onClick={() => setUi({ view: "home", notes: false, tag: null, folderId: null })}>
@@ -452,6 +457,14 @@ function WelcomeView() {
           <p>Listas, vídeos sueltos, suscripciones y completadas: tus cursos y vídeos de YouTube.</p>
           <span className="welcome-open">Abrir →</span>
           <span className="welcome-count">{nLists} lista(s) · {nCh} canal(es)</span>
+        </div>
+        <div className="welcome-card wc-green" role="button" tabIndex={0}
+          onClick={() => goItem("habits")}>
+          <div className="welcome-ic">🌱</div>
+          <h3>Hábitos</h3>
+          <p>Tu rutina diaria: marca los días, registra el tiempo (también el de tus vídeos) y mira rachas y estadísticas.</p>
+          <span className="welcome-open">Abrir →</span>
+          <span className="welcome-count">{habits.length} hábito(s) · hoy {doneToday} de {habits.length}</span>
         </div>
       </div>
       <div className="welcome-strip">💡 Esta pantalla es solo la puerta de entrada: dentro, cada bloque funciona igual que siempre. Vuelve aquí cuando quieras con el botón 🏠 Home de la barra lateral.</div>
@@ -1185,6 +1198,7 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "ytlistcats") await tc.restoreYtListCat(t.id);
     else if (t.kind === "ytvidcats") await tc.restoreYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.restoreYtLooseVideo(t.id);
+    else if (t.kind === "habits") await tc.restoreHabit(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1203,6 +1217,7 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "ytlistcats") await tc.purgeYtListCat(t.id);
     else if (t.kind === "ytvidcats") await tc.purgeYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.purgeYtLooseVideo(t.id);
+    else if (t.kind === "habits") await tc.purgeHabit(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (
@@ -1236,6 +1251,7 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "ytlistcats") await tc.restoreYtListCat(t.id);
     else if (t.kind === "ytvidcats") await tc.restoreYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.restoreYtLooseVideo(t.id);
+    else if (t.kind === "habits") await tc.restoreHabit(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1254,6 +1270,7 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "ytlistcats") await tc.purgeYtListCat(t.id);
     else if (t.kind === "ytvidcats") await tc.purgeYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.purgeYtLooseVideo(t.id);
+    else if (t.kind === "habits") await tc.purgeHabit(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (
@@ -1432,6 +1449,9 @@ export function Views() {
   else if (v === "ytsubcat") body = <YtSubCatView />;
   else if (v === "ytdone") body = <YtDoneView />;
   else if (v === "ytloose") body = <YtLooseView />;
+  else if (v === "ytlistcat") body = <YtListCatView />;
+  else if (v === "ytvidcat") body = <YtVidCatView />;
+  else if (v === "habits") body = <HabitsView />;
 
   return (
     <>

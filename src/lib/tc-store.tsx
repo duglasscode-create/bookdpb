@@ -145,6 +145,15 @@ type Ctx = {
   purgeYtLooseVideo: (id: string) => Promise<void>;
   moveYtLooseVideoToCat: (videoId: string, catId: string | null) => Promise<void>;
   reorderYtLooseVideos: (catId: string | null, dragId: string, beforeId: string | null) => Promise<void>;
+  /* v2.5.0: Hábitos */
+  createHabit: (input: Partial<T.Habit>) => Promise<T.Habit>;
+  saveHabit: (h: T.Habit) => Promise<void>;
+  deleteHabit: (id: string) => Promise<void>;
+  restoreHabit: (id: string) => Promise<void>;
+  purgeHabit: (id: string) => Promise<void>;
+  reorderHabits: (dragId: string, beforeId: string | null) => Promise<void>;
+  setHabitDay: (habitId: string, day: string, patch: { done?: boolean; seconds?: number }) => Promise<void>;
+  addHabitTime: (habitId: string, addSeconds: number) => Promise<void>;
   /* activity + trash */
   logActivity: (type: string, text: string, detail?: string) => Promise<void>;
   clearActivity: () => Promise<void>;
@@ -167,6 +176,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     accounts: [], assistants: [], reminders: [], activity: [],
     ytLists: [], ytVideos: [], ytCats: [], ytChannels: [],
     ytListCats: [], ytVidCats: [], ytLooseVideos: [],
+    habits: [], habitDays: [],
     settings: { ...T.DEFAULT_SETTINGS },
   }));
   /* Ref espejo síncrono: permite leer el estado justo después de escribirlo
@@ -203,7 +213,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow, ytl, ytv, ytc, yth, ylc, yvc, ylv] = await Promise.all([
+      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow, ytl, ytv, ytc, yth, ylc, yvc, ylv, hab, habd] = await Promise.all([
         supabase.from("collections").select("*").eq("user_id", userId).order("position", { ascending: true }),
         supabase.from("bookmarks").select("*").eq("user_id", userId),
         supabase.from("bookmark_collections").select("bookmark_id, collection_id").eq("user_id", userId),
@@ -224,6 +234,9 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         supabase.from("yt_list_cats").select("*").eq("user_id", userId),
         supabase.from("yt_vid_cats").select("*").eq("user_id", userId),
         supabase.from("yt_loose_videos").select("*").eq("user_id", userId),
+        /* v2.5.0: Hábitos; si las tablas aún no existen, data viene null y se sigue sin ellas */
+        supabase.from("habits").select("*").eq("user_id", userId),
+        supabase.from("habit_days").select("*").eq("user_id", userId),
       ]);
       const colRows: Record<string, any>[] = (cols.data || []) as Record<string, any>[];
       const spaceRows = colRows.filter((c) => !c.parent_id && !(c as any).is_deleted);
@@ -358,7 +371,18 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         deletedAt: v.is_deleted ? (ts(v.deleted_at) || Date.now()) : null,
       }));
 
-      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings, ytLists, ytVideos, ytCats, ytChannels, ytListCats, ytVidCats, ytLooseVideos });
+      const habits: T.Habit[] = ((hab.data || []) as any[]).map((h: any, i: number) => ({
+        id: h.id, name: h.name || "Hábito", color: h.color || "#22c55e",
+        icon: h.icon || "", iconType: h.icon_type || "emoji",
+        note: h.note || "", ytLinkCat: h.yt_cat_id || null, archived: !!h.archived,
+        order: h.position ?? i, deletedAt: h.is_deleted ? (ts(h.deleted_at) || Date.now()) : null,
+      }));
+      const habitDays: T.HabitDay[] = ((habd.data || []) as any[]).map((r: any) => ({
+        habitId: r.habit_id, day: String(r.day || "").slice(0, 10),
+        done: !!r.done, seconds: r.seconds || 0,
+      })).filter((r: T.HabitDay) => !!r.day);
+
+      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings, ytLists, ytVideos, ytCats, ytChannels, ytListCats, ytVidCats, ytLooseVideos, habits, habitDays });
       (window as unknown as { __tcSettings?: T.Settings }).__tcSettings = settings;
       settingsReady.current = true;
 
@@ -1042,7 +1066,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase]);
 
   const emptyTrash = useCallback(async () => {
-    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[], ytLists: [] as string[], ytVideos: [] as string[], ytChannels: [] as string[], ytCats: [] as string[], ytListCats: [] as string[], ytVidCats: [] as string[], ytLooseVideos: [] as string[] };
+    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[], ytLists: [] as string[], ytVideos: [] as string[], ytChannels: [] as string[], ytCats: [] as string[], ytListCats: [] as string[], ytVidCats: [] as string[], ytLooseVideos: [] as string[], habits: [] as string[] };
     setDb((d) => {
       d.spaces.forEach((s) => { if (s.deletedAt) st.spaces.push(s.id); });
       d.folders.forEach((f) => { if (f.deletedAt) st.folders.push(f.id); });
@@ -1061,6 +1085,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       (d.ytListCats || []).forEach((c) => { if (c.deletedAt) st.ytListCats.push(c.id); });
       (d.ytVidCats || []).forEach((c) => { if (c.deletedAt) st.ytVidCats.push(c.id); });
       (d.ytLooseVideos || []).forEach((v) => { if (v.deletedAt) st.ytLooseVideos.push(v.id); });
+      (d.habits || []).forEach((h) => { if (h.deletedAt) st.habits.push(h.id); });
       return {
         ...d,
         spaces: d.spaces.filter((s) => !s.deletedAt),
@@ -1079,6 +1104,8 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         ytVidCats: (d.ytVidCats || []).filter((c) => !c.deletedAt),
         ytLooseVideos: (d.ytLooseVideos || []).filter((v) => !v.deletedAt)
           .map((v) => (v.catId && st.ytVidCats.includes(v.catId) ? { ...v, catId: null } : v)),
+        habits: (d.habits || []).filter((h) => !h.deletedAt),
+        habitDays: (d.habitDays || []).filter((r) => !st.habits.includes(r.habitId)),
       };
     });
     if (st.bookmarks.length) {
@@ -1104,6 +1131,10 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     if (st.ytVidCats.length) {
       await supabase.from("yt_loose_videos").update({ cat_id: null }).in("cat_id", st.ytVidCats);
       await supabase.from("yt_vid_cats").delete().in("id", st.ytVidCats);
+    }
+    if (st.habits.length) {
+      await supabase.from("habit_days").delete().in("habit_id", st.habits);
+      await supabase.from("habits").delete().in("id", st.habits);
     }
   }, [supabase]);
 
@@ -1565,6 +1596,56 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     }
   }, [supabase, userId, setDb]);
 
+  /* ================= v2.5.0: Hábitos — registro por días =================
+     Van antes de addYtProgress porque el reproductor los usa: el tiempo
+     de vídeo de una categoría de listas vinculada suma al hábito. */
+  const setHabitDay = useCallback(async (habitId: string, day: string, patch: { done?: boolean; seconds?: number }) => {
+    let row: T.HabitDay | null = null;
+    setDb((d) => {
+      const cur = (d.habitDays || []).find((r) => r.habitId === habitId && r.day === day);
+      row = {
+        habitId, day,
+        done: patch.done !== undefined ? patch.done : (cur ? cur.done : false),
+        seconds: patch.seconds !== undefined ? Math.max(0, Math.round(patch.seconds)) : (cur ? cur.seconds : 0),
+      };
+      const days = cur
+        ? (d.habitDays || []).map((r) => (r.habitId === habitId && r.day === day ? row! : r))
+        : [...(d.habitDays || []), row!];
+      return { ...d, habitDays: days };
+    });
+    if (row) {
+      const r = row as T.HabitDay;
+      await supabase.from("habit_days").upsert(
+        { user_id: userId, habit_id: habitId, day, done: r.done, seconds: r.seconds },
+        { onConflict: "habit_id,day" });
+    }
+  }, [supabase, userId, setDb]);
+
+  /* Suma segundos al día de hoy de un hábito; con 60 s o más acumulados
+     el día queda marcado como hecho. Lo usan el cronómetro de la vista
+     de Hábitos y el vínculo con Youtube Manager. */
+  const addHabitTime = useCallback(async (habitId: string, addSeconds: number) => {
+    const add = Math.max(0, Math.round(addSeconds));
+    if (!add) return;
+    const day = T.localDStr(new Date());
+    let row: T.HabitDay | null = null;
+    setDb((d) => {
+      const cur = (d.habitDays || []).find((r) => r.habitId === habitId && r.day === day);
+      const seconds = (cur ? cur.seconds : 0) + add;
+      row = { habitId, day, done: (cur ? cur.done : false) || seconds >= 60, seconds };
+      const days = cur
+        ? (d.habitDays || []).map((r) => (r.habitId === habitId && r.day === day ? row! : r))
+        : [...(d.habitDays || []), row!];
+      return { ...d, habitDays: days };
+    });
+    if (row) {
+      const r = row as T.HabitDay;
+      await supabase.from("habit_days").upsert(
+        { user_id: userId, habit_id: habitId, day, done: r.done, seconds: r.seconds },
+        { onConflict: "habit_id,day" });
+    }
+  }, [supabase, userId, setDb]);
+
   const addYtProgress = useCallback(async (youtubeId: string, posSec: number, addSeconds: number) => {
     let sw = 0;
     setDb((d) => {
@@ -1587,7 +1668,28 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     await supabase.from("yt_loose_videos")
       .update({ progress_sec: Math.max(0, Math.round(posSec)), seconds_watched: sw })
       .eq("user_id", userId).eq("youtube_id", youtubeId);
-  }, [supabase, userId, setDb]);
+    /* v2.5.0: el tiempo de este vídeo suma a los hábitos vinculados a la
+       categoría de listas del vídeo (la de su lista o la de su lista
+       madre si es una sublista). Nunca debe romper el reproductor. */
+    try {
+      const d = getDb();
+      const vid = d.ytVideos.find((v) => v.youtubeId === youtubeId);
+      if (vid && addSeconds > 0) {
+        const catIds = new Set<string>();
+        const l = d.ytLists.find((x) => x.id === vid.listId);
+        if (l) {
+          if (l.categoryId) catIds.add(l.categoryId);
+          if (l.parentId) {
+            const p = d.ytLists.find((x) => x.id === l.parentId);
+            if (p && p.categoryId) catIds.add(p.categoryId);
+          }
+        }
+        const linked = (d.habits || []).filter((h) =>
+          !h.deletedAt && !h.archived && h.ytLinkCat && catIds.has(h.ytLinkCat));
+        for (const h of linked) await addHabitTime(h.id, addSeconds);
+      }
+    } catch { /* el vínculo es un extra: si falla, la reproducción sigue */ }
+  }, [supabase, userId, setDb, getDb, addHabitTime]);
 
   const importYtVideos = useCallback(async (listId: string, items: { youtubeId: string; title: string; channelName?: string; durationSec?: number }[]) => {
     const cur = getDb();
@@ -1934,6 +2036,70 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     await Promise.all(list.map((v) => supabase.from("yt_loose_videos").update({ position: v.order }).eq("id", v.id)));
   }, [supabase]);
 
+  /* ================= v2.5.0: Hábitos — CRUD ================= */
+  const habitRow = (h: T.Habit) => ({
+    user_id: userId, name: h.name, color: h.color, icon: h.icon || null,
+    icon_type: h.iconType || "emoji", note: h.note || "", yt_cat_id: h.ytLinkCat || null,
+    archived: !!h.archived, position: h.order ?? 0,
+    is_deleted: !!h.deletedAt, deleted_at: iso(h.deletedAt),
+  });
+
+  const createHabit = useCallback(async (input: Partial<T.Habit>) => {
+    const h: T.Habit = {
+      id: T.uid("hb"), name: input.name || "Nuevo hábito",
+      color: input.color || "#22c55e", icon: input.icon || "", iconType: input.iconType || "emoji",
+      note: input.note || "", ytLinkCat: input.ytLinkCat || null, archived: false,
+      order: 0, deletedAt: null,
+    };
+    setDb((d) => { h.order = T.nextOrder(d.habits || []); return { ...d, habits: [...(d.habits || []), h] }; });
+    const { data } = await supabase.from("habits").insert(habitRow(h)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== h.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, habits: (d.habits || []).map((x) => (x.id === h.id ? { ...x, id: nid } : x)) }));
+      return { ...h, id: nid };
+    }
+    return h;
+  }, [supabase, userId]);
+
+  const saveHabit = useCallback(async (h: T.Habit) => {
+    setDb((d) => ({ ...d, habits: (d.habits || []).map((x) => (x.id === h.id ? h : x)) }));
+    await supabase.from("habits").update(habitRow(h)).eq("id", h.id);
+  }, [supabase, userId]);
+
+  const deleteHabit = useCallback(async (id: string) => {
+    /* A la papelera global (MIS ITEMS → Papelera), como todo lo demás:
+       su registro de días se conserva y vuelve con él al restaurar. */
+    const now = Date.now();
+    setDb((d) => ({ ...d, habits: (d.habits || []).map((h) => (h.id === id ? { ...h, deletedAt: now } : h)) }));
+    await supabase.from("habits").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreHabit = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, habits: (d.habits || []).map((h) => (h.id === id ? { ...h, deletedAt: null } : h)) }));
+    await supabase.from("habits").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeHabit = useCallback(async (id: string) => {
+    setDb((d) => ({
+      ...d,
+      habits: (d.habits || []).filter((h) => h.id !== id),
+      habitDays: (d.habitDays || []).filter((r) => r.habitId !== id),
+    }));
+    await supabase.from("habit_days").delete().eq("habit_id", id);
+    await supabase.from("habits").delete().eq("id", id);
+  }, [supabase]);
+
+  const reorderHabits = useCallback(async (dragId: string, beforeId: string | null) => {
+    let list: T.Habit[] = [];
+    setDb((d) => {
+      list = (d.habits || []).filter((h) => !h.deletedAt).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((h) => [h.id, h.order]));
+      return { ...d, habits: (d.habits || []).map((h) => (m.has(h.id) ? { ...h, order: m.get(h.id)! } : h)) };
+    });
+    await Promise.all(list.map((h) => supabase.from("habits").update({ position: h.order }).eq("id", h.id)));
+  }, [supabase]);
+
   const value: Ctx = {
     userId, db, loading, refresh: load, toasts, toast, openUrl,
     saveSpace, createSpace, trashSpace, restoreSpace, purgeSpace, reorderSpaces,
@@ -1961,6 +2127,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     createYtListCat, saveYtListCat, deleteYtListCat, restoreYtListCat, purgeYtListCat, reorderYtListCats, setYtListCategory,
     createYtVidCat, saveYtVidCat, deleteYtVidCat, restoreYtVidCat, purgeYtVidCat, reorderYtVidCats,
     createYtLooseVideo, saveYtLooseVideo, deleteYtLooseVideo, restoreYtLooseVideo, purgeYtLooseVideo, moveYtLooseVideoToCat, reorderYtLooseVideos,
+    createHabit, saveHabit, deleteHabit, restoreHabit, purgeHabit, reorderHabits, setHabitDay, addHabitTime,
     logActivity, clearActivity, emptyTrash, updateSettings,
   };
 

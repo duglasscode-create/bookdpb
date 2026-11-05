@@ -23,7 +23,7 @@ let dragState: { type: string; id: string } | null = null;
 /* El mousedown se guarda (captura) porque en dragstart e.target es la <section> */
 let downEl: HTMLElement | null = null;
 
-const SEC_DEFAULT = ["spaces", "misitems", "youtube", "tags", "sessions"];
+const SEC_DEFAULT = ["spaces", "misitems", "youtube", "habitos", "tags", "sessions"];
 const ITEM_KEYS = ["accounts", "reminders", "favorites", "history", "trash", "readlater"];
 const YT_KEYS = ["ytlists", "ytloose", "ytsubs", "ytdone"];
 const YT_DEFS: Record<string, { label: string; icon: string; hint: string }> = {
@@ -38,6 +38,7 @@ const INITIAL_UI: UiState = {
   view: "welcome", spaceId: null, folderId: null, tag: null, notes: false,
   notesTab: "all", notesQuery: "", histFilter: "all",
   remindersTab: "all", trashTab: "all", ytListId: null, ytSubCatId: null,
+  ytListCatId: null, ytVidCatId: null,
 };
 
 export function TabmeApp({ userId }: { userId: string }) {
@@ -851,6 +852,7 @@ export function Sidebar() {
           if (k === "spaces") return <SpacesSec key={k} />;
           if (k === "misitems") return <MisItemsSec key={k} />;
           if (k === "youtube") return <YoutubeSec key={k} />;
+          if (k === "habitos") return <HabitsSec key={k} />;
           if (k === "tags") return <TagsSec key={k} />;
           /* NOTA: sección «Sesiones guardadas» no portable a web (chrome.tabs) — omitida */
           return null;
@@ -1296,6 +1298,73 @@ function YoutubeSec() {
   );
 }
 
+function HabitsSec() {
+  const tc = useTC();
+  const { ui, openModal, goItem, liveHabits } = useApp();
+  const isExpanded = () => {
+    const m = tc.db.settings.expandedItems || {};
+    return m.habitos !== undefined ? !!m.habitos : true;
+  };
+  const toggleExpanded = () => {
+    tc.updateSettings({ expandedItems: { ...(tc.db.settings.expandedItems || {}), habitos: !isExpanded() } });
+  };
+  const expanded = isExpanded();
+  const habits = liveHabits().filter((h) => !h.archived).sort(T.byOrder);
+  const days = tc.db.habitDays || [];
+  const todayK = T.localDStr(new Date());
+  const doneToday = habits.filter((h) => days.some((r) => r.habitId === h.id && r.day === todayK && r.done)).length;
+  const active = ui.view === "habits";
+
+  return (
+    <SecShell secKey="habitos" className="side-section sec-card sec-habits">
+      <ul className="item-tree">
+        <li className="item-section">
+          <div className={"item-head" + (active ? " active" : "")} role="button" tabIndex={0}
+            title="Hábitos: tu rutina diaria"
+            onClick={(e) => {
+              const t = e.target as HTMLElement;
+              if (t.closest('[data-act="add"]')) { e.stopPropagation(); openModal("habit", {}); return; }
+              if (t.closest(".chev")) { toggleExpanded(); return; }
+              if (t.closest(".sec-grip")) return;
+              goItem("habits");
+            }}>
+            <span className="chev">{expanded ? "▾" : "▸"}</span>
+            <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
+            <span className="sec-ico" style={{ fontSize: 15 }}>🌱</span>
+            <span className="side-name">HÁBITOS</span>
+            <span className="icon-btn item-add" data-act="add" title="Nuevo hábito">＋</span>
+          </div>
+          {expanded && (
+            <ul className="item-rows">
+              <li className="item-row-wrap">
+                <div className={"item-row" + (active ? " active" : "")} title="Ver mi rutina diaria"
+                  onClick={() => goItem("habits")}>
+                  <span className="chev-spacer"></span>
+                  <span className="item-ico">🌱</span>
+                  <span className="side-name">Rutina diaria</span>
+                  <span className="count">{doneToday}/{habits.length} hoy</span>
+                </div>
+              </li>
+              {habits.slice(0, 6).map((h) => {
+                const done = days.some((r) => r.habitId === h.id && r.day === todayK && r.done);
+                return (
+                  <li className="item-row-wrap" key={h.id}>
+                    <div className="item-row" title={h.name} onClick={() => goItem("habits")}>
+                      <span className="chev-spacer"></span>
+                      <span className="item-ico">{done ? "✅" : "▫️"}</span>
+                      <span className="side-name">{h.name}</span>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </li>
+      </ul>
+    </SecShell>
+  );
+}
+
 function MisItemsSec() {
   const tc = useTC();
   const app = useApp();
@@ -1516,7 +1585,14 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.4.1</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.5.0</h3><ul>
+          <li>🌱 <b>Bloque nuevo: HÁBITOS</b> — tu rutina diaria en su propia tarjeta verde de la barra lateral (y en la Home). Rejilla de 14 días: un toque marca el día (también días pasados), con tu racha 🔥 y tu total 🏆 en cada hábito. Arrastra las filas para reordenarlas.</li>
+          <li>⏱️ <b>El tiempo queda registrado</b>: cada hábito suma tiempo con su cronómetro ▶ (corre con la app abierta y visible; si cambias de pestaña se pausa) y, si lo vinculas a una categoría de Listas, el tiempo de sus vídeos suma solo y marca el día al llegar a 1 minuto.</li>
+          <li>📊 <b>Estadísticas por hábito</b>: clic en el nombre y ves el anillo de % del periodo, hechos/fallados (los fallados se cuentan solos), racha actual y mejor racha, tiempo del periodo y pestaña de 📝 Notas. Periodos: semana, mes, 3 meses, 6 meses o desde el inicio.</li>
+          <li>🎨 <b>Icono completo</b>: cada hábito lleva Emoji, Iconos UI o Imagen, y su color, como las categorías. Desde ✎ puedes archivar un hábito (queda en «Archivados», fuera de la rutina pero con su historial) o enviarlo a la papelera global.</li>
+          <li>📂 <b>Categorías sin desplegables, como pediste</b>: en Listas, Vídeos sueltos y Suscripciones ya nada se despliega — el índice enseña tarjetas de categoría con una muestra de lo que llevan dentro, y clic en una categoría abre su página propia con solo esa categoría. El Tablero de Listas por estados se queda igual. Para mover una lista de categoría, su modal de edición trae el desplegable «Categoría» (canales y vídeos sueltos ya lo tenían).</li>
+          <li>⚠️ Necesita ejecutar UNA vez el SQL nuevo (supabase-migracion-v2.5.0.sql) en Supabase: crea las dos tablas de Hábitos sin tocar tus datos.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.4.1</h4><ul>
           <li>🏠 <b>Home de bienvenida</b>: la app arranca en una pantalla estilo tu Workspace — título y tres tarjetas grandes (SPACES, MIS ITEMS y YOUTUBE MANAGER) con su «Abrir →». El botón 🏠 Home lleva ahí; dentro, cada bloque funciona como siempre.</li>
           <li>▦ <b>Columnas del Tablero, todas iguales</b>: las columnas de Listas salían con tamaños distintos y la última quedaba cortada; ahora miden exactamente lo mismo.</li>
           <li>🏁 <b>Las completadas ya no están en Listas</b>: una playlist al 100% solo sale en su sección Completadas (o si la buscas). El Tablero se queda con Sin empezar y En curso.</li>

@@ -8,6 +8,8 @@ import { createPortal } from "react-dom";
 import * as T from "@/lib/tc";
 import { useTC } from "@/lib/tc-store";
 import { useApp } from "./tc-ui";
+import { habTotal, habStreak, habBestStreak } from "./HabitsView";
+import { YtIconEl } from "./YoutubeViews";
 
 /* ---------- utilidades literales ---------- */
 
@@ -1227,25 +1229,30 @@ function NoteFullModal({ id }: { id: string }) {
 
 function YtListModal({ id, parentId, categoryId }: { id?: string; parentId?: string | null; categoryId?: string | null }) {
   const tc = useTC();
-  const { closeModal, goYtList, liveYtLists } = useApp();
+  const { closeModal, goYtList, liveYtLists, liveYtListCats } = useApp();
   const db = tc.db;
   const edit = id ? db.ytLists.find((l) => l.id === id) : undefined;
   const parent = !edit && parentId ? liveYtLists().find((l) => l.id === parentId) : undefined;
   const nameRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef(edit ? edit.color : T.PALETTE[0]);
   const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
+  /* v2.5.0: sin desplegables, mover una lista de categoría se hace aquí,
+     con este desplegable (las sublistas heredan la de su lista madre). */
+  const isTop = edit ? !edit.parentId : !parentId;
+  const listCats = liveYtListCats().sort(T.byOrder);
+  const [cat, setCat] = useState<string>(edit ? (edit.categoryId || "") : (categoryId || ""));
 
   const save = async () => {
     const name = nameRef.current?.value.trim() || "";
     if (!name) { tc.toast("Escribe un nombre"); return; }
     const ic = iconRef.current;
     if (edit) {
-      await tc.saveYtList({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType });
+      await tc.saveYtList({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, categoryId: isTop ? (cat || null) : edit.categoryId });
       tc.toast("Lista guardada");
     } else {
       const nl = await tc.createYtList({
         name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType,
-        parentId: parentId || null, categoryId: categoryId || null,
+        parentId: parentId || null, categoryId: isTop ? (cat || null) : null,
       });
       tc.toast(parent ? "Sublista creada" : "Lista creada");
       closeModal();
@@ -1266,6 +1273,14 @@ function YtListModal({ id, parentId, categoryId }: { id?: string; parentId?: str
       <YtCatIconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
         onPick={(v) => { iconRef.current = v; }} />
       <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
+      {isTop ? (
+        <div className="field"><label>Categoría</label>
+          <select value={cat} onChange={(e) => setCat(e.target.value)}>
+            <option value="">Sin categoría</option>
+            {listCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      ) : null}
       <div className="modal-actions">
         <button className="btn" onClick={closeModal}>Cancelar</button>
         <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
@@ -1845,6 +1860,183 @@ function ColorPickModal({ current, onPick }: { current?: string; onPick?: (hex: 
   );
 }
 
+/* ---------- v2.5.0: modal crear/editar hábito ---------- */
+
+function HabitModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal, liveYtListCats } = useApp();
+  const edit = id ? (tc.db.habits || []).find((h) => h.id === id) : undefined;
+  const nameRef = useRef<HTMLInputElement>(null);
+  const colorRef = useRef(edit ? edit.color : "#22c55e");
+  const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
+  const [link, setLink] = useState<string>(edit ? (edit.ytLinkCat || "") : "");
+  const listCats = liveYtListCats().sort(T.byOrder);
+
+  const save = async () => {
+    const name = nameRef.current?.value.trim() || "";
+    if (!name) { tc.toast("Escribe un nombre"); return; }
+    const ic = iconRef.current;
+    if (edit) {
+      await tc.saveHabit({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null });
+      tc.toast("Hábito guardado");
+    } else {
+      await tc.createHabit({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null });
+      tc.toast("Hábito creado");
+    }
+    closeModal();
+  };
+  const archive = async () => {
+    if (!edit) return;
+    await tc.saveHabit({ ...edit, archived: !edit.archived });
+    tc.toast(edit.archived ? "Hábito restaurado" : "Hábito archivado");
+    closeModal();
+  };
+  const del = async () => {
+    if (!edit) return;
+    if (!confirm("¿Enviar a la papelera el hábito «" + edit.name + "»? Su historial de días se conserva y vuelve con él si lo restauras. Podrás recuperarlo desde MIS ITEMS → Papelera durante 30 días.")) return;
+    await tc.deleteHabit(edit.id);
+    tc.toast("Hábito enviado a la papelera");
+    closeModal();
+  };
+
+  return (
+    <ModalShell>
+      <h3>{edit ? "Editar hábito" : "🌱 Nuevo hábito"}</h3>
+      <div className="field"><label>Nombre</label>
+        <input type="text" id="mName" ref={nameRef} defaultValue={edit ? edit.name : ""} placeholder="p. ej. Estudiar letón" />
+      </div>
+      <YtCatIconPicker icon={iconRef.current.icon} iconType={iconRef.current.iconType}
+        onPick={(v) => { iconRef.current = v; }} />
+      <ColorField value={colorRef.current} onChange={(h) => { colorRef.current = h; }} />
+      <div className="field"><label>Vincular a Youtube Manager (opcional)</label>
+        <select value={link} onChange={(e) => setLink(e.target.value)}>
+          <option value="">Sin vínculo</option>
+          {listCats.map((c) => <option key={c.id} value={c.id}>🎬 Listas · {c.name}</option>)}
+        </select>
+        <p className="ip-hint">Si lo vinculas, el tiempo que veas de vídeos de esa categoría de listas suma solo a este hábito y marca el día al llegar a 1 minuto.</p>
+      </div>
+      <div className="modal-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" id="mSave" onClick={save}>Guardar</button>
+      </div>
+      {edit ? (
+        <div className="modal-actions hab-danger-row">
+          <button className="btn" onClick={archive}>{edit.archived ? "↩ Desarchivar" : "🗄️ Archivar"}</button>
+          <button className="btn danger" onClick={del}>🗑️ Enviar a la papelera</button>
+        </div>
+      ) : null}
+    </ModalShell>
+  );
+}
+
+/* ---------- v2.5.0: estadísticas de un hábito ---------- */
+
+function HabitStatsModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal, liveYtListCats } = useApp();
+  const h = (tc.db.habits || []).find((x) => x.id === id);
+  const [period, setPeriod] = useState(30);
+  const [tab, setTab] = useState("stats");
+  const [note, setNote] = useState(h ? h.note : "");
+  if (!h) {
+    return (
+      <ModalShell>
+        <h3>Hábito no encontrado</h3>
+        <div className="modal-actions"><button className="btn primary" onClick={closeModal}>Cerrar</button></div>
+      </ModalShell>
+    );
+  }
+  const days = tc.db.habitDays || [];
+  const mine = days.filter((r) => r.habitId === h.id);
+  const total = habTotal(days, h.id);
+  const streak = habStreak(days, h.id);
+  const best = habBestStreak(days, h.id);
+  const totalSecs = mine.reduce((a, r) => a + (r.seconds || 0), 0);
+
+  /* ventana del periodo: «desde el inicio» llega hasta el primer día
+     con registro; los demás periodos son días naturales hacia atrás */
+  let span = period;
+  if (period >= 3650) {
+    if (mine.length) {
+      const first = mine.map((r) => r.day).sort()[0];
+      span = Math.max(1, Math.round((new Date(T.localDStr(new Date()) + "T12:00:00").getTime() -
+        new Date(first + "T12:00:00").getTime()) / 86400000) + 1);
+    } else span = 1;
+  }
+  const todayK = T.localDStr(new Date());
+  let done = 0, missed = 0, secs = 0;
+  for (let i = 0; i < span; i++) {
+    const d = new Date(); d.setDate(d.getDate() - i);
+    const key = T.localDStr(d);
+    const e = mine.find((r) => r.day === key);
+    if (e && e.done) done++;
+    else if (key !== todayK) missed++;
+    if (e) secs += e.seconds || 0;
+  }
+  const pct = (done + missed) ? Math.round((done / (done + missed)) * 100) : 0;
+  const linked = h.ytLinkCat ? liveYtListCats().find((c) => c.id === h.ytLinkCat) : null;
+  const chips: [number, string][] = [[7, "Semana"], [30, "Mes"], [90, "3 meses"], [180, "6 meses"], [3650, "Desde el inicio"]];
+
+  return (
+    <ModalShell wide>
+      <h3>
+        <span className="hab-ico sm" style={{ background: h.color }}>
+          {h.icon ? <YtIconEl icon={h.icon} iconType={h.iconType} size={17} /> : <span style={{ fontSize: 14 }}>🌱</span>}
+        </span>{" "}
+        {h.name}
+      </h3>
+      <div className="hab-chiprow">
+        {chips.map(([p, label]) => (
+          <button key={p} className={"hab-chip" + (period === p ? " active" : "")} onClick={() => setPeriod(p)}>{label}</button>
+        ))}
+      </div>
+      <div className="hab-chiprow">
+        <button className={"hab-chip" + (tab === "stats" ? " active" : "")} onClick={() => setTab("stats")}>📊 Estadísticas</button>
+        <button className={"hab-chip" + (tab === "notes" ? " active" : "")} onClick={() => setTab("notes")}>📝 Notas</button>
+      </div>
+      {tab === "notes" ? (
+        <div className="field">
+          <label>Notas de este hábito</label>
+          <textarea rows={6} value={note} placeholder="Trucos, enlaces, cómo lo haces…"
+            onChange={(e) => setNote(e.target.value)} />
+          <div className="modal-actions">
+            <button className="btn" onClick={closeModal}>Cerrar</button>
+            <button className="btn primary" onClick={async () => {
+              await tc.saveHabit({ ...h, note });
+              tc.toast("Nota guardada");
+              closeModal();
+            }}>Guardar nota</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="hab-stats">
+            <div className="hab-ring" style={{ background: "conic-gradient(" + h.color + " " + pct + "%, rgba(127,127,127,.18) " + pct + "%)" }}>
+              <div className="hab-ring-in"><b>{pct}%</b><small>del periodo</small></div>
+            </div>
+            <div className="hab-boxes">
+              <div className="hab-box"><b>{done}</b><small>✅ Hechos</small></div>
+              <div className="hab-box"><b>{missed}</b><small>❌ Fallados</small></div>
+              <div className="hab-box"><b>🔥 {streak}</b><small>Racha actual</small></div>
+              <div className="hab-box"><b>🏆 {best}</b><small>Mejor racha</small></div>
+              <div className="hab-box"><b>{secs ? T.fmtInvested(secs) : "0 min"}</b><small>⏱ Tiempo en el periodo</small></div>
+              <div className="hab-box"><b>{total}</b><small>Días en total</small></div>
+            </div>
+          </div>
+          <p className="ip-hint">
+            {linked ? "🔗 Vinculado a la categoría de listas «" + linked.name + "»: su tiempo de vídeo suma solo. " : ""}
+            Tiempo total registrado: {totalSecs ? T.fmtInvested(totalSecs) : "0 min"}.
+            Los fallados se cuentan solos: días del periodo sin marcar (hoy no cuenta, el día no ha terminado).
+          </p>
+          <div className="modal-actions">
+            <button className="btn primary" onClick={closeModal}>Cerrar</button>
+          </div>
+        </>
+      )}
+    </ModalShell>
+  );
+}
+
 /* ================= Modals() ================= */
 
 export function Modals() {
@@ -1871,6 +2063,8 @@ export function Modals() {
     case "ytlistcat": return <YtListCatModal id={p.id} />;
     case "ytvidcat": return <YtVidCatModal id={p.id} />;
     case "ytloosevideo": return <YtLooseVideoModal catId={p.catId} />;
+    case "habit": return <HabitModal id={p.id} />;
+    case "habitstats": return <HabitStatsModal id={p.id} />;
     case "colorPick": return <ColorPickModal current={p.current} onPick={p.onPick} />;
     default: return null;
   }
