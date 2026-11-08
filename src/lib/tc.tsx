@@ -70,7 +70,7 @@ export type YtVideo = {
    listas vinculada) y estadísticas por periodos. */
 export type Habit = {
   id: string; name: string; color: string; icon: string; iconType: string;
-  note: string; ytLinkCat: string | null; archived: boolean;
+  note: string; ytLinkCat: string | null; folderId: string | null; archived: boolean;
   order: number; deletedAt: number | null;
 };
 /* Un día de un hábito: hecho o no, y los segundos registrados ese día */

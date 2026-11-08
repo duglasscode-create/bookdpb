@@ -1870,17 +1870,24 @@ function HabitModal({ id }: { id?: string }) {
   const colorRef = useRef(edit ? edit.color : "#22c55e");
   const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
   const [link, setLink] = useState<string>(edit ? (edit.ytLinkCat || "") : "");
+  const [folder, setFolder] = useState<string>(edit ? (edit.folderId || "") : "");
   const listCats = liveYtListCats().sort(T.byOrder);
+  const folders = (tc.db.folders || []).filter((f) => !f.deletedAt).sort(T.byOrder);
+  const folderLabel = (f: T.Folder) => {
+    const sp = (tc.db.spaces || []).find((x) => x.id === f.spaceId);
+    const par = f.parentId ? (tc.db.folders || []).find((x) => x.id === f.parentId) : null;
+    return "📁 " + (sp ? sp.name : "") + (par ? " › " + par.name : "") + " › " + f.name;
+  };
 
   const save = async () => {
     const name = nameRef.current?.value.trim() || "";
     if (!name) { tc.toast("Escribe un nombre"); return; }
     const ic = iconRef.current;
     if (edit) {
-      await tc.saveHabit({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null });
+      await tc.saveHabit({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null, folderId: folder || null });
       tc.toast("Hábito guardado");
     } else {
-      await tc.createHabit({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null });
+      await tc.createHabit({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null, folderId: folder || null });
       tc.toast("Hábito creado");
     }
     closeModal();
@@ -1914,6 +1921,13 @@ function HabitModal({ id }: { id?: string }) {
           {listCats.map((c) => <option key={c.id} value={c.id}>🎬 Listas · {c.name}</option>)}
         </select>
         <p className="ip-hint">Si lo vinculas, el tiempo que veas de vídeos de esa categoría de listas suma solo a este hábito y marca el día al llegar a 1 minuto.</p>
+      </div>
+      <div className="field"><label>Carpeta de recursos vinculada (opcional)</label>
+        <select value={folder} onChange={(e) => setFolder(e.target.value)}>
+          <option value="">Sin vínculo</option>
+          {folders.map((f) => <option key={f.id} value={f.id}>{folderLabel(f)}</option>)}
+        </select>
+        <p className="ip-hint">Acceso directo desde la fila del hábito a su carpeta de marcadores: p. ej. la carpeta de recursos de este curso.</p>
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={closeModal}>Cancelar</button>

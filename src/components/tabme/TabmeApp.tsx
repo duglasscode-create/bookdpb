@@ -63,18 +63,8 @@ export function TabmeApp({ userId }: { userId: string }) {
 function Shell() {
   const tc = useTC();
   const { ui, setUi, modal, closeModal, openDd, setOpenDd, getZoom, liveReminders, ytPlayer } = useApp();
-  const restored = useRef(false);
-
-  /* Restaurar selección guardada (vista folder solo si la carpeta existe) */
-  useEffect(() => {
-    if (tc.loading || restored.current) return;
-    restored.current = true;
-    const st = tc.db.settings;
-    const sp = st.activeSpaceId && tc.db.spaces.find((s) => s.id === st.activeSpaceId && !s.deletedAt);
-    const f = st.activeFolderId && tc.db.folders.find((x) => x.id === st.activeFolderId && !x.deletedAt);
-    if (f) setUi({ spaceId: f.spaceId, folderId: f.id, view: "folder" });
-    else if (sp) setUi({ spaceId: sp.id, view: "all" });
-  }, [tc.loading, tc.db, setUi]);
+  /* v2.5.1: la app arranca SIEMPRE en la Home de bienvenida con los
+     4 bloques; ya no se restaura el último space/carpeta visitado. */
 
   /* Tema, clases de body y zoom (applyTheme/applyPrefs/applyZoom del original) */
   useEffect(() => {
@@ -462,11 +452,11 @@ function YtPlayerBar() {
 
 /* ================= Buscador global ================= */
 
-type SRItem = { kind: string; title: string; url: string; fav: string; sub: string; data: any };
+type SRItem = { kind: string; title: string; url: string; fav: string; sub: string; data: any; snippet?: string };
 
 function SearchBox() {
   const tc = useTC();
-  const { liveBookmarks, liveAccounts, liveReminders, goItem } = useApp();
+  const { liveBookmarks, liveAccounts, liveReminders, goItem, liveNotes, liveYtLists, liveYtVideos, liveYtChannels, liveHabits, goYtList, goYtSubCat, goYtVidCat, setUi, openModal } = useApp();
   const [q, setQ] = useState("");
   const [groups, setGroups] = useState<{ label: string; items: SRItem[] }[]>([]);
   const [items, setItems] = useState<SRItem[]>([]);
@@ -496,16 +486,70 @@ function SearchBox() {
       .slice(0, 5)
       .map((r) => ({ kind: "reminder", title: r.title, url: r.url, fav: "", sub: "Recordatorio · " + T.fmtDateTime(r.when), data: r }));
     if (rems.length) gs.push({ label: "⏰ Recordatorios", items: rems });
+    /* v2.5.1: la búsqueda es GLOBAL de verdad — también notas, listas,
+       vídeos, canales y hábitos, como la búsqueda global de BigNotes */
+    const plain = (html: string) => { const el = document.createElement("div"); el.innerHTML = html || ""; return (el.textContent || "").replace(/\s+/g, " ").trim(); };
+    const snip = (text: string) => { const i = text.toLowerCase().indexOf(qq); if (i < 0) return ""; const a = Math.max(0, i - 40); const b = Math.min(text.length, i + qq.length + 60); return (a > 0 ? "…" : "") + text.slice(a, b) + (b < text.length ? "…" : ""); };
+    const notes = liveNotes()
+      .filter((n) => (n.title + " " + plain(n.html) + " " + (n.linksText || "")).toLowerCase().includes(qq))
+      .slice(0, 5)
+      .map((n) => { const p = plain(n.html); return { kind: "note", title: n.title || "Nota sin título", url: "", fav: "", sub: "Nota", data: n, snippet: p.toLowerCase().includes(qq) ? snip(p) : undefined }; });
+    if (notes.length) gs.push({ label: "📝 Notas", items: notes });
+    const ytlists = liveYtLists()
+      .filter((l) => l.name.toLowerCase().includes(qq))
+      .slice(0, 5)
+      .map((l) => ({ kind: "ytlist", title: l.name, url: "", fav: "", sub: "Lista de YouTube", data: l }));
+    if (ytlists.length) gs.push({ label: "🎬 Listas", items: ytlists });
+    const listName = (id: string) => { const l = liveYtLists().find((x) => x.id === id); return l ? l.name : "Lista"; };
+    const ytvs = liveYtVideos()
+      .filter((v) => (v.title + " " + (v.channelName || "")).toLowerCase().includes(qq))
+      .slice(0, 5)
+      .map((v) => ({ kind: "ytvideo", title: v.title, url: "", fav: v.thumbnail || "", sub: "Vídeo · " + listName(v.listId), data: v }));
+    if (ytvs.length) gs.push({ label: "🎞️ Vídeos", items: ytvs });
+    const loose = (tc.db.ytLooseVideos || [])
+      .filter((v) => !v.deletedAt && (v.title + " " + (v.channelName || "")).toLowerCase().includes(qq))
+      .slice(0, 3)
+      .map((v) => ({ kind: "ytloose", title: v.title, url: "", fav: v.thumbnail || "", sub: "Vídeo suelto", data: v }));
+    if (loose.length) gs.push({ label: "🎞️ Vídeos sueltos", items: loose });
+    const chans = liveYtChannels()
+      .filter((c) => (c.name + " " + (c.handle || "")).toLowerCase().includes(qq))
+      .slice(0, 5)
+      .map((c) => ({ kind: "ytchannel", title: c.name, url: c.url, fav: c.avatarUrl || "", sub: "Suscripción", data: c }));
+    if (chans.length) gs.push({ label: "📡 Canales", items: chans });
+    const habs = liveHabits()
+      .filter((h) => h.name.toLowerCase().includes(qq))
+      .slice(0, 4)
+      .map((h) => ({ kind: "habit", title: h.name, url: "", fav: "", sub: "Hábito", data: h }));
+    if (habs.length) gs.push({ label: "🌱 Hábitos", items: habs });
     /* NOTA: grupos «Pestañas abiertas» y «Cerradas recientemente» no portables a web (chrome.tabs) */
     const flat: SRItem[] = [];
     gs.forEach((g) => g.items.forEach((it) => flat.push(it)));
     setGroups(gs); setItems(flat); setActive(flat.length ? 0 : -1); setOpen(true);
-  }, [liveBookmarks, liveAccounts, liveReminders, hide]);
+  }, [liveBookmarks, liveAccounts, liveReminders, liveNotes, liveYtLists, liveYtVideos, liveYtChannels, liveHabits, tc, hide]);
 
   useEffect(() => {
     const el = document.querySelector(".sr-item.active") as HTMLElement | null;
     if (el) el.scrollIntoView({ block: "nearest" });
   }, [active, open]);
+
+  /* v2.5.1: la palabra buscada, en amarillo dentro de los resultados */
+  const hl = (text: string) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle || !text) return text;
+    const low = text.toLowerCase();
+    let idx = low.indexOf(needle);
+    if (idx < 0) return text;
+    const out: React.ReactNode[] = [];
+    let i = 0, k = 0;
+    while (idx >= 0) {
+      out.push(text.slice(i, idx));
+      out.push(<mark key={k++} className="sr-hl">{text.slice(idx, idx + needle.length)}</mark>);
+      i = idx + needle.length;
+      idx = low.indexOf(needle, i);
+    }
+    out.push(text.slice(i));
+    return out;
+  };
 
   const activate = useCallback((i: number) => {
     const it = items[i];
@@ -514,17 +558,23 @@ function SearchBox() {
     if (!it) return;
     if (it.kind === "reminder") goItem("reminders");
     else if (it.kind === "account") goItem("accounts");
+    else if (it.kind === "note") { setUi({ notes: true }); openModal("noteFull", { id: it.data.id }); }
+    else if (it.kind === "ytlist") goYtList(it.data.id);
+    else if (it.kind === "ytvideo") goYtList(it.data.listId);
+    else if (it.kind === "ytloose") goYtVidCat(it.data.catId ?? "__none");
+    else if (it.kind === "ytchannel") goYtSubCat(it.data.categoryId ?? "__none");
+    else if (it.kind === "habit") setUi({ view: "habits", notes: false });
     else {
       tc.openUrl(it.url);
       tc.markBookmarkOpened(it.data.id);
       tc.logActivity("open", "Abriste un marcador", it.title);
     }
-  }, [items, hide, goItem, tc]);
+  }, [items, hide, goItem, goYtList, goYtSubCat, goYtVidCat, setUi, openModal, tc]);
 
   return (
     <div className="search-wrap">
       <span className="search-icon">🔎</span>
-      <input id="search" ref={inputRef} type="text" placeholder="Buscar marcadores…  ( pulsa / )"
+      <input id="search" ref={inputRef} type="text" placeholder="Buscar en todo BookDPB…  ( pulsa / )"
         autoComplete="off" spellCheck={false}
         onChange={(e) => {
           setQ(e.target.value);
@@ -542,6 +592,7 @@ function SearchBox() {
         onBlur={() => window.setTimeout(hide, 150)} />
       <div id="searchResults" className={"search-results" + (open ? "" : " hidden")} role="listbox">
         {open && !items.length && <div className="sr-empty">Sin resultados para «{q}»</div>}
+        {open && items.length > 0 && <div className="sr-count">{items.length} resultado(s) para «{q.trim()}» · en toda la app</div>}
         {groups.map((g) => {
           let gi = 0;
           return (
@@ -557,8 +608,9 @@ function SearchBox() {
                     {it.fav
                       ? <T.FavImg src={it.fav} letter={letter} size={18} />
                       : <span className="fav-letter" style={{ width: 18, height: 18, fontSize: 11, margin: 0 }}>{letter}</span>}
-                    <span className="t">{it.title}</span>
+                    <span className="t">{hl(it.title)}</span>
                     <span className="d">{it.sub}</span>
+                    {it.snippet ? <span className="sr-snip">{hl(it.snippet)}</span> : null}
                   </div>
                 );
               })}
@@ -606,6 +658,10 @@ function TopActions() {
       <button id="btnShowNotes" className="tbtn" title="Ver notas" aria-label="Ver notas"
         onClick={() => setUi({ notes: true })}>
         <span style={{ fontSize: 17 }}>👁</span>
+      </button>
+      <button id="btnTheme" className="tbtn" title={tc.db.settings.darkMode ? "Cambiar a tema claro" : "Cambiar a tema oscuro"} aria-label="Tema claro u oscuro"
+        onClick={() => tc.updateSettings({ darkMode: !tc.db.settings.darkMode })}>
+        <span style={{ fontSize: 16 }}>{tc.db.settings.darkMode ? "☀️" : "🌙"}</span>
       </button>
       <span className="tsep" aria-hidden="true"></span>
       <div className="dd-wrap">
@@ -958,6 +1014,7 @@ function SpacesSec() {
       <h3><span className="sec-chev" role="button" title={expanded ? "Plegar bloque" : "Desplegar bloque"}
           onClick={(e) => { e.stopPropagation(); toggleExpanded(); }}>{expanded ? "▾" : "▸"}</span>
         <span className="sec-grip" title="Arrastrar para reordenar la sección">⋮⋮</span>
+        <img className="sec-ico" src="/spaces-icon.png" alt="" />{" "}
         <span className="h3-label">Spaces</span>{" "}
         <button id="btnNewSpace" className="mini-btn" title="Crear space"
           onClick={() => openModal("space", { id: null })}>＋</button></h3>
@@ -1549,7 +1606,7 @@ function HelpModals() {
           <h4>Notas</h4>
           <p>El <b>icono de nota</b> de la barra superior abre el <b>editor enriquecido</b>: negrita, listas, colores, imágenes, vídeos y archivos adjuntos. Usa ⋯ en cada nota para fijar, archivar, marcarla para <b>leer después</b> o verla a pantalla completa.</p>
           <h4>Buscar</h4>
-          <p>Pulsa <kbd>/</kbd> o <kbd>Ctrl</kbd>+<kbd>K</kbd> para buscar en marcadores, cuentas, asistentes, recordatorios, pestañas abiertas y cerradas recientemente.</p>
+          <p>Pulsa <kbd>/</kbd> o <kbd>Ctrl</kbd>+<kbd>K</kbd> para buscar en TODA la app: marcadores, notas, cuentas, recordatorios, listas, vídeos, canales y hábitos. La palabra buscada aparece resaltada en amarillo en los resultados.</p>
           <h4>Abrir BookDPB</h4>
           <p>BookDPB ya no toma la página de nueva pestaña: convive con otras extensiones (p. ej. Wallsflow). Ábrelo cuando quieras con el botón 🗂 del popup, clic derecho en su icono → «Abrir BookDPB», el panel lateral, o <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>O</kbd>.</p>
         </div>
@@ -1585,7 +1642,17 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.5.0</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.5.1</h3><ul>
+          <li>🏠 <b>Arranque siempre en la Home</b>: la app ya no vuelve al último space o carpeta donde estabas; abre siempre en la pantalla de bienvenida con los 4 bloques.</li>
+          <li>🌱 <b>Hábitos, días alineados y hoy primero</b>: cada etiqueta de día cae exactamente sobre su círculo, y la rejilla empieza por el día más cercano (hoy a la izquierda, y de ahí hacia atrás).</li>
+          <li>⏱️ <b>El cronómetro ya no se pausa</b>: cuenta por hora real y sigue sumando aunque cambies de pestaña o de web, mientras la pestaña de BookDPB siga abierta.</li>
+          <li>🪐 <b>Tu icono en SPACES</b>: la cabecera del bloque en la barra lateral lleva por fin su icono (la órbita que elegiste), como los demás bloques.</li>
+          <li>🌙 <b>Tema claro/oscuro en la barra superior</b>: botón propio 🌙/☀️ arriba, fuera del menú de Configuración.</li>
+          <li>📁 <b>Carpeta de recursos vinculada</b>: cada hábito puede vincularse a una carpeta de Spaces (en su modal de edición) y su fila enseña el acceso directo 📁 a esa carpeta — p. ej. los recursos de un curso.</li>
+          <li>🔎 <b>Buscador global, como el de BigNotes</b>: busca también en notas, listas, vídeos, canales y hábitos; dice cuántos resultados hay en toda la app y resalta en <b>amarillo</b> la palabra buscada, con el fragmento donde aparece en las notas. Y verificado: el texto de la búsqueda NO se guarda con tus datos, así que no puede quedar ningún filtro fantasma escondido.</li>
+          <li>📝 <b>Pestañas de Notas ordenadas</b>: Notas / Archivadas / Papelera van en su propia fila y con separación, y el buscador en la suya.</li>
+          <li>⚠️ Necesita ejecutar UNA vez el SQL nuevo (supabase-migracion-v2.5.1.sql) en Supabase: añade la columna de la carpeta vinculada a Hábitos, sin tocar tus datos.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.5.0</h4><ul>
           <li>🌱 <b>Bloque nuevo: HÁBITOS</b> — tu rutina diaria en su propia tarjeta verde de la barra lateral (y en la Home). Rejilla de 14 días: un toque marca el día (también días pasados), con tu racha 🔥 y tu total 🏆 en cada hábito. Arrastra las filas para reordenarlas.</li>
           <li>⏱️ <b>El tiempo queda registrado</b>: cada hábito suma tiempo con su cronómetro ▶ (corre con la app abierta y visible; si cambias de pestaña se pausa) y, si lo vinculas a una categoría de Listas, el tiempo de sus vídeos suma solo y marca el día al llegar a 1 minuto.</li>
           <li>📊 <b>Estadísticas por hábito</b>: clic en el nombre y ves el anillo de % del periodo, hechos/fallados (los fallados se cuentan solos), racha actual y mejor racha, tiempo del periodo y pestaña de 📝 Notas. Periodos: semana, mes, 3 meses, 6 meses o desde el inicio.</li>

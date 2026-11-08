@@ -2,8 +2,8 @@
    Bloque «Hábitos»: la rutina diaria de Duglass. Rejilla de 14 días
    (tocar un círculo marca/desmarca ese día, también días pasados),
    racha 🔥 y total 🏆 por hábito, tiempo registrado por día
-   (cronómetro con la app abierta o tiempo de vídeo de la categoría
-   de listas vinculada), estadísticas por periodos y archivados.
+   (cronómetro por hora real — v2.5.1 ya no se pausa al cambiar de
+   pestaña — o tiempo de vídeo de la categoría de listas vinculada), estadísticas por periodos y archivados.
    Mismo lenguaje visual que el resto de BookDPB y drag & drop para
    reordenar las filas. */
 "use client";
@@ -56,11 +56,11 @@ const fmtClock = (sec: number) => {
 
 export function HabitsView() {
   const tc = useTC();
-  const { goHome, liveHabits, liveYtListCats, openModal } = useApp();
+  const { goHome, goFolder, liveHabits, liveYtListCats, openModal } = useApp();
   const dragRef = useRef<DragState>(null);
   const [off, setOff] = useState(0);
   const [showArch, setShowArch] = useState(false);
-  const [timer, setTimer] = useState<{ id: string; start: number; hiddenMs: number; hiddenSince: number | null } | null>(null);
+  const [timer, setTimer] = useState<{ id: string; start: number } | null>(null);
   const [, tick] = useReducer((x: number) => x + 1, 0);
 
   const days = tc.db.habitDays || [];
@@ -70,34 +70,24 @@ export function HabitsView() {
   const todayK = T.localDStr(new Date());
   const doneToday = habits.filter((h) => { const e = habEntry(days, h.id, todayK); return e && e.done; }).length;
 
-  /* ventana de 14 días que termina hoy (off = días hacia atrás) */
+  /* ventana de 14 días que termina hoy, HOY PRIMERO y de ahí hacia
+     atrás (v2.5.1, como pidió Duglass; off = ventanas hacia atrás) */
   const end = new Date(); end.setDate(end.getDate() - off);
   const win: Date[] = [];
-  for (let i = 13; i >= 0; i--) { const d = new Date(end); d.setDate(d.getDate() - i); win.push(d); }
+  for (let i = 0; i < 14; i++) { const d = new Date(end); d.setDate(d.getDate() - i); win.push(d); }
   const winLabel = win[0].toLocaleDateString("es-ES", { day: "numeric", month: "short" }) +
     " – " + win[13].toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 
-  /* cronómetro: repintar cada segundo y no contar el tiempo con la
-     pestaña oculta (el hábito suma tiempo de app abierta y visible) */
+  /* cronómetro (v2.5.1): repintar cada segundo; el tiempo se calcula
+     por hora real desde el arranque — NO se pausa al cambiar de
+     pestaña ni de web, mientras la pestaña de BookDPB siga abierta */
   useEffect(() => {
     if (!timer) return;
     const iv = setInterval(tick, 1000);
     return () => clearInterval(iv);
   }, [timer]);
-  useEffect(() => {
-    const onVis = () => {
-      setTimer((t) => {
-        if (!t) return t;
-        if (document.hidden) return t.hiddenSince ? t : { ...t, hiddenSince: Date.now() };
-        if (t.hiddenSince) return { ...t, hiddenMs: t.hiddenMs + (Date.now() - t.hiddenSince), hiddenSince: null };
-        return t;
-      });
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, []);
   const elapsedOf = (t: NonNullable<typeof timer>) => Math.max(0, Math.floor(
-    (Date.now() - t.start - t.hiddenMs - (t.hiddenSince ? Date.now() - t.hiddenSince : 0)) / 1000));
+    (Date.now() - t.start) / 1000));
 
   const stopTimer = async (save: boolean) => {
     if (!timer) return;
@@ -116,7 +106,7 @@ export function HabitsView() {
   const toggleTimer = (h: T.Habit) => {
     if (timer && timer.id === h.id) { void stopTimer(true); return; }
     if (timer) void stopTimer(true);
-    setTimer({ id: h.id, start: Date.now(), hiddenMs: 0, hiddenSince: document.hidden ? Date.now() : null });
+    setTimer({ id: h.id, start: Date.now() });
   };
 
   const toggleDay = (h: T.Habit, key: string) => {
@@ -198,6 +188,7 @@ export function HabitsView() {
               const streak = habStreak(days, h.id);
               const todayE = habEntry(days, h.id, todayK);
               const linked = h.ytLinkCat ? listCats.find((c) => c.id === h.ytLinkCat) : null;
+              const linkedFolder = h.folderId ? (tc.db.folders || []).find((f) => f.id === h.folderId && !f.deletedAt) : null;
               const running = !!timer && timer.id === h.id;
               return (
                 <div key={h.id} className={"hab-row" + (running ? " running" : "")} draggable
@@ -234,6 +225,7 @@ export function HabitsView() {
                       {"🏆 " + total + " · 🔥 " + streak}
                       {todayE && todayE.seconds ? " · ⏱ hoy " + T.fmtInvested(todayE.seconds) : ""}
                       {linked ? " · 🔗 " + linked.name : ""}
+                      {linkedFolder ? <> · <button className="hab-linkchip" title="Abrir su carpeta de recursos vinculada" onClick={() => goFolder(linkedFolder.id)}>📁 {linkedFolder.name}</button></> : null}
                     </span>
                   </div>
                   <span className="hab-days">
@@ -256,7 +248,7 @@ export function HabitsView() {
                   <span className="hab-acts">
                     {running ? <span className="hab-clock">{fmtClock(elapsedOf(timer))}</span> : null}
                     <button className={"icon-btn hab-timer" + (running ? " on" : "")}
-                      title={running ? "Detener y sumar el tiempo" : "Cronómetro: suma tiempo a este hábito mientras la app está abierta"}
+                      title={running ? "Detener y sumar el tiempo" : "Cronómetro: cuenta por hora real — sigue aunque cambies de pestaña o de web"}
                       onClick={() => toggleTimer(h)}>{running ? "⏹" : "▶"}</button>
                     <button className="icon-btn" title="Editar hábito"
                       onClick={() => openModal("habit", { id: h.id })}>✎</button>
@@ -266,7 +258,7 @@ export function HabitsView() {
             })}
           </div>
           <p className="hab-foot">
-            El cronómetro ▶ suma el tiempo con la app abierta y visible (si cambias de pestaña, se pausa solo).
+            El cronómetro ▶ cuenta por hora real: sigue sumando aunque cambias de pestaña o de web, mientras la pestaña de BookDPB siga abierta en el navegador.
             Si un hábito está vinculado a una categoría de listas, el tiempo de sus vídeos también suma y marca el día al llegar a 1 minuto.
           </p>
         </>

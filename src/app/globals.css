@@ -1442,3 +1442,21 @@ body.yt-open .sidebar { padding-bottom: 96px; }
   .hab-row { flex-wrap: wrap; }
   .hab-days { margin-left: 0; flex-wrap: wrap; }
 }
+
+/* ===== v2.5.1 ===== */
+/* Hábitos: la cabecera reserva el hueco de los botones ▶/✎ para que
+   cada etiqueta de día caiga exactamente sobre su círculo */
+.hab-hacts { display: block; flex: 0 0 49px; }
+/* Notas: pestañas en su propia fila y con separación; buscador en la suya */
+#notesToolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+#notesToolbar .nt-tabs { flex: 1 1 100%; gap: 10px; }
+#notesToolbar .nt-tab { padding: 7px 16px; }
+#notesToolbar .nt-search { flex: 1 1 240px; }
+/* Buscador global: resaltado amarillo y línea de resultados */
+.sr-item { flex-wrap: wrap; }
+.sr-hl { background: #ffe066; color: #1c2430; padding: 0 1px; border-radius: 2px; }
+.sr-count { padding: 8px 12px 2px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.sr-snip { flex: 1 1 100%; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 28px; }
+/* Hábito: acceso directo a su carpeta de recursos */
+.hab-linkchip { background: none; border: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+.hab-linkchip:hover { text-decoration: underline; }

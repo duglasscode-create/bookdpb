@@ -374,7 +374,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       const habits: T.Habit[] = ((hab.data || []) as any[]).map((h: any, i: number) => ({
         id: h.id, name: h.name || "Hábito", color: h.color || "#22c55e",
         icon: h.icon || "", iconType: h.icon_type || "emoji",
-        note: h.note || "", ytLinkCat: h.yt_cat_id || null, archived: !!h.archived,
+        note: h.note || "", ytLinkCat: h.yt_cat_id || null, folderId: h.folder_id || null, archived: !!h.archived,
         order: h.position ?? i, deletedAt: h.is_deleted ? (ts(h.deleted_at) || Date.now()) : null,
       }));
       const habitDays: T.HabitDay[] = ((habd.data || []) as any[]).map((r: any) => ({
@@ -2039,7 +2039,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   /* ================= v2.5.0: Hábitos — CRUD ================= */
   const habitRow = (h: T.Habit) => ({
     user_id: userId, name: h.name, color: h.color, icon: h.icon || null,
-    icon_type: h.iconType || "emoji", note: h.note || "", yt_cat_id: h.ytLinkCat || null,
+    icon_type: h.iconType || "emoji", note: h.note || "", yt_cat_id: h.ytLinkCat || null, folder_id: h.folderId || null,
     archived: !!h.archived, position: h.order ?? 0,
     is_deleted: !!h.deletedAt, deleted_at: iso(h.deletedAt),
   });
@@ -2048,7 +2048,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     const h: T.Habit = {
       id: T.uid("hb"), name: input.name || "Nuevo hábito",
       color: input.color || "#22c55e", icon: input.icon || "", iconType: input.iconType || "emoji",
-      note: input.note || "", ytLinkCat: input.ytLinkCat || null, archived: false,
+      note: input.note || "", ytLinkCat: input.ytLinkCat || null, folderId: input.folderId || null, archived: false,
       order: 0, deletedAt: null,
     };
     setDb((d) => { h.order = T.nextOrder(d.habits || []); return { ...d, habits: [...(d.habits || []), h] }; });
