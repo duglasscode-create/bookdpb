@@ -761,10 +761,50 @@ function MisItemsView() {
   const def = { icon: "🗂", label: "Mis Items", hint: "Todos tus items en un vistazo" };
   const counts: Record<string, number> = {};
   keys.forEach((k) => { counts[k] = itemCount(k); });
+  /* v2.6.1: las tarjetas/filas de la página TAMBIÉN se reordenan
+     arrastrando (regla de Duglass: drag & drop en el sidebar Y en las
+     páginas) — escriben el mismo settings.itemOrder que usa el
+     sidebar, así que mover aquí mueve allí y al revés */
+  const miDragKey = useRef<string | null>(null);
+  const moveItemKey = (d: string, before: string) => {
+    if (d === before) return;
+    const nk = keys.filter((x) => x !== d);
+    nk.splice(nk.indexOf(before), 0, d);
+    tc.updateSettings({ itemOrder: nk });
+  };
+  const tileDnD = (k: string) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => {
+      miDragKey.current = k;
+      e.dataTransfer.setData("text/plain", k);
+      e.dataTransfer.effectAllowed = "move";
+      (e.currentTarget as HTMLElement).classList.add("dragging");
+    },
+    onDragEnd: (e: React.DragEvent) => {
+      (e.currentTarget as HTMLElement).classList.remove("dragging");
+      miDragKey.current = null;
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (!miDragKey.current || miDragKey.current === k) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      (e.currentTarget as HTMLElement).classList.add("drop-before");
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      (e.currentTarget as HTMLElement).classList.remove("drop-before");
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).classList.remove("drop-before");
+      const d = miDragKey.current;
+      miDragKey.current = null;
+      if (d) moveItemKey(d, k);
+    },
+  });
   const body = mode === "list" ? (
     <div className="view-list zoomable">
       {keys.map((k) => (
-        <div key={k} className="vrow mi-row" onClick={() => goItem(k)}>
+        <div key={k} className="vrow mi-row" onClick={() => goItem(k)} {...tileDnD(k)}>
           <span className="vrow-ic mi-logo-sm">{T.ITEM_DEFS[k].icon}</span>
           <div className="vrow-body">
             <div className="vrow-title">{T.ITEM_DEFS[k].label}</div>
@@ -777,7 +817,7 @@ function MisItemsView() {
   ) : (
     <div className={mode === "board" ? "view-board zoomable" : "item-grid zoomable"}>
       {keys.map((k) => (
-        <div key={k} className="card ref-card mi-tile" title={"Abrir " + T.ITEM_DEFS[k].label} onClick={() => goItem(k)}>
+        <div key={k} className="card ref-card mi-tile" title={"Abrir " + T.ITEM_DEFS[k].label + " · arrastra para reordenar"} onClick={() => goItem(k)} {...tileDnD(k)}>
           <div className="ref-logo mi-logo">{T.ITEM_DEFS[k].icon}</div>
           <div className="ref-name">{T.ITEM_DEFS[k].label}</div>
           <div className="ref-domain">{counts[k]} elemento(s)</div>

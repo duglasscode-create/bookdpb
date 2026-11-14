@@ -1876,27 +1876,27 @@ function TodoTaskModal({ id }: { id?: string }) {
     closeModal();
   };
   return (
-    <div className="modal">
+    <ModalShell>
       <h3>{edit ? "✎ Editar tarea" : "＋ Nueva tarea"}</h3>
-      <div className="m-field">
+      <div className="field">
         <label>Título</label>
-        <input type="text" placeholder="p. ej. Pagar la luz" autoFocus value={title}
+        <input type="text" placeholder="p. ej. Pagar la luz" value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") void save(); }} />
       </div>
-      <div className="m-field">
+      <div className="field">
         <label>Categoría</label>
         <select value={catId} onChange={(e) => setCatId(e.target.value)}>
           <option value="">Sin categoría</option>
           {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <div className="m-hint">Las categorías se crean y editan con «＋ Nueva categoría» en la página de Tareas.</div>
+        <p className="ip-hint">Las categorías se crean y editan con «＋ Nueva categoría» en la página de Tareas.</p>
       </div>
-      <div className="m-actions">
+      <div className="modal-actions">
         <button className="btn" onClick={closeModal}>Cancelar</button>
         <button className="btn primary" onClick={() => void save()}>Guardar</button>
       </div>
-    </div>
+    </ModalShell>
   );
 }
 
@@ -1930,28 +1930,27 @@ function TodoCatModal({ id }: { id?: string }) {
     closeModal();
   };
   return (
-    <div className="modal">
+    <ModalShell>
       <h3>{edit ? "✎ Editar categoría" : "＋ Nueva categoría"}</h3>
-      <div className="m-field">
+      <div className="field">
         <label>Nombre</label>
-        <input type="text" placeholder="p. ej. Cursos, Casa, Salud…" autoFocus value={name}
+        <input type="text" placeholder="p. ej. Cursos, Casa, Salud…" value={name}
           onChange={(e) => setName(e.target.value)} />
       </div>
       <YtCatIconPicker icon={icon} iconType={iconType}
         onPick={(v) => { setIcon(v.icon); setIconType(v.iconType); }} />
       <ColorField value={color} onChange={setColor} />
-      <div className="m-actions">
+      <div className="modal-actions">
         <button className="btn" onClick={closeModal}>Cancelar</button>
         <button className="btn primary" onClick={() => void save()}>Guardar</button>
       </div>
       {edit ? (
-        <div className="m-danger-zone">
-          <div className="mdz-title">Zona peligrosa</div>
+        <div className="modal-actions hab-danger-row">
           <button className="btn danger" onClick={() => void del()}>🗑️ Borrar categoría</button>
-          <div className="m-hint">Se elimina del todo. Sus tareas quedan «Sin categoría», no se borran.</div>
+          <span className="ip-hint">Se elimina del todo. Sus tareas quedan «Sin categoría», no se borran.</span>
         </div>
       ) : null}
-    </div>
+    </ModalShell>
   );
 }
 
