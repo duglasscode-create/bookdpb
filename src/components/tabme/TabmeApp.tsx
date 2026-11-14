@@ -403,20 +403,20 @@ function YtPlayerBar() {
           <div className="yt-bar-btns">
             <button className={"yt-ibtn" + (shuffle ? " on" : "")} title="Aleatorio"
               onClick={() => setShuffle(!shuffle)}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" /><line x1="4" y1="4" x2="9" y2="9" /></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" /><line x1="4" y1="4" x2="9" y2="9" /></svg>
             </button>
-            <button className="yt-ibtn" title="Anterior" onClick={() => step(-1)}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2.5v14H6zM19.5 5v14L10 12z" /></svg>
+            <button className="yt-ibtn" title="Retroceder · vídeo anterior" onClick={() => step(-1)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2.5v14H6zM19.5 5v14L10 12z" /></svg>
             </button>
             <button className="yt-ibtn yt-play" title={playing ? "Pausa" : "Reproducir"}
               onClick={() => {
                 const p = playerRef.current; if (!p) return;
                 if (playing) p.pauseVideo(); else p.playVideo();
               }}>{playing
-                ? <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 5h3.8v14H6.5zM13.7 5h3.8v14h-3.8z" /></svg>
-                : <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l10-6.86a1.03 1.03 0 0 0 0-1.76l-10-6.86A1.03 1.03 0 0 0 8 5.14z" /></svg>}</button>
-            <button className="yt-ibtn" title="Siguiente" onClick={() => step(1)}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 5H18v14h-2.5zM4.5 5v14L14 12z" /></svg>
+                ? <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 5h3.8v14H6.5zM13.7 5h3.8v14h-3.8z" /></svg>
+                : <svg width="21" height="21" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72c0 .8.87 1.3 1.56.88l10-6.86a1.03 1.03 0 0 0 0-1.76l-10-6.86A1.03 1.03 0 0 0 8 5.14z" /></svg>}</button>
+            <button className="yt-ibtn" title="Adelantar · vídeo siguiente" onClick={() => step(1)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 5H18v14h-2.5zM4.5 5v14L14 12z" /></svg>
             </button>
           </div>
           <div className="yt-track">
@@ -1642,7 +1642,12 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.5.1</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.5.2</h3><ul>
+          <li>⏱️ <b>El cronómetro de Hábitos ya no se pierde</b>: antes vivía dentro de la vista de Hábitos y moría sin guardar si salías de la vista o el iPad recargaba la página — por eso un estudio de 1 h 44 podía quedarse en 1 h 10. Ahora su arranque queda guardado en tus ajustes: <b>sigue contando por hora real aunque cambies de vista, de pestaña o de web, y aunque cierres y reabras la app</b>; al volver lo verás en marcha donde lo dejaste. Nuevo botón ✕ para cancelarlo sin guardar si te equivocas de hábito. El tiempo de los vídeos de YouTube de tus listas se sigue sumando sobre la marcha, como siempre — eso no se ha tocado.</li>
+          <li>🎞️ <b>Hábitos vinculados también a Vídeos sueltos</b>: el desplegable «Vincular a Youtube Manager» del hábito ahora tiene dos grupos — 🎬 Listas y 🎞️ Vídeos sueltos — y el tiempo que veas de vídeos sueltos de la categoría vinculada suma al hábito y marca el día, igual que con las listas.</li>
+          <li>⏯️ <b>Botonera del reproductor corregida</b>: botones más grandes y separados, para no pulsar el de al lado sin querer — 🔀 Aleatorio · ⏮ Retroceder (vídeo anterior) · ⏸/▶ Pausar/Reproducir, grande en el centro · ⏭ Adelantar (vídeo siguiente) — cada uno con su nombre claro al pasar el puntero.</li>
+          <li>⚠️ Necesita ejecutar UNA vez el SQL nuevo (supabase-migracion-v2.5.2.sql) en Supabase: añade la columna del vínculo con Vídeos sueltos a Hábitos, sin tocar tus datos.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.5.1</h4><ul>
           <li>🏠 <b>Arranque siempre en la Home</b>: la app ya no vuelve al último space o carpeta donde estabas; abre siempre en la pantalla de bienvenida con los 4 bloques.</li>
           <li>🌱 <b>Hábitos, días alineados y hoy primero</b>: cada etiqueta de día cae exactamente sobre su círculo, y la rejilla empieza por el día más cercano (hoy a la izquierda, y de ahí hacia atrás).</li>
           <li>⏱️ <b>El cronómetro ya no se pausa</b>: cuenta por hora real y sigue sumando aunque cambies de pestaña o de web, mientras la pestaña de BookDPB siga abierta.</li>

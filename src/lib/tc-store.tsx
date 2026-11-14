@@ -374,7 +374,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       const habits: T.Habit[] = ((hab.data || []) as any[]).map((h: any, i: number) => ({
         id: h.id, name: h.name || "Hábito", color: h.color || "#22c55e",
         icon: h.icon || "", iconType: h.icon_type || "emoji",
-        note: h.note || "", ytLinkCat: h.yt_cat_id || null, folderId: h.folder_id || null, archived: !!h.archived,
+        note: h.note || "", ytLinkCat: h.yt_cat_id || null, ytLinkVidCat: h.yt_vid_cat_id || null, folderId: h.folder_id || null, archived: !!h.archived,
         order: h.position ?? i, deletedAt: h.is_deleted ? (ts(h.deleted_at) || Date.now()) : null,
       }));
       const habitDays: T.HabitDay[] = ((habd.data || []) as any[]).map((r: any) => ({
@@ -1670,22 +1670,29 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       .eq("user_id", userId).eq("youtube_id", youtubeId);
     /* v2.5.0: el tiempo de este vídeo suma a los hábitos vinculados a la
        categoría de listas del vídeo (la de su lista o la de su lista
-       madre si es una sublista). Nunca debe romper el reproductor. */
+       madre si es una sublista). v2.5.2: también suma a los hábitos
+       vinculados a la categoría de VÍDEOS SUELTOS del vídeo, si es un
+       vídeo suelto. Nunca debe romper el reproductor. */
     try {
       const d = getDb();
-      const vid = d.ytVideos.find((v) => v.youtubeId === youtubeId);
-      if (vid && addSeconds > 0) {
+      if (addSeconds > 0) {
         const catIds = new Set<string>();
-        const l = d.ytLists.find((x) => x.id === vid.listId);
-        if (l) {
-          if (l.categoryId) catIds.add(l.categoryId);
-          if (l.parentId) {
-            const p = d.ytLists.find((x) => x.id === l.parentId);
-            if (p && p.categoryId) catIds.add(p.categoryId);
+        const vid = d.ytVideos.find((v) => v.youtubeId === youtubeId);
+        if (vid) {
+          const l = d.ytLists.find((x) => x.id === vid.listId);
+          if (l) {
+            if (l.categoryId) catIds.add(l.categoryId);
+            if (l.parentId) {
+              const p = d.ytLists.find((x) => x.id === l.parentId);
+              if (p && p.categoryId) catIds.add(p.categoryId);
+            }
           }
         }
+        const loose = (d.ytLooseVideos || []).find((v) => v.youtubeId === youtubeId);
         const linked = (d.habits || []).filter((h) =>
-          !h.deletedAt && !h.archived && h.ytLinkCat && catIds.has(h.ytLinkCat));
+          !h.deletedAt && !h.archived && (
+            (h.ytLinkCat && catIds.has(h.ytLinkCat)) ||
+            (h.ytLinkVidCat && loose && loose.catId === h.ytLinkVidCat)));
         for (const h of linked) await addHabitTime(h.id, addSeconds);
       }
     } catch { /* el vínculo es un extra: si falla, la reproducción sigue */ }
@@ -2039,7 +2046,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   /* ================= v2.5.0: Hábitos — CRUD ================= */
   const habitRow = (h: T.Habit) => ({
     user_id: userId, name: h.name, color: h.color, icon: h.icon || null,
-    icon_type: h.iconType || "emoji", note: h.note || "", yt_cat_id: h.ytLinkCat || null, folder_id: h.folderId || null,
+    icon_type: h.iconType || "emoji", note: h.note || "", yt_cat_id: h.ytLinkCat || null, yt_vid_cat_id: h.ytLinkVidCat || null, folder_id: h.folderId || null,
     archived: !!h.archived, position: h.order ?? 0,
     is_deleted: !!h.deletedAt, deleted_at: iso(h.deletedAt),
   });
@@ -2048,7 +2055,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     const h: T.Habit = {
       id: T.uid("hb"), name: input.name || "Nuevo hábito",
       color: input.color || "#22c55e", icon: input.icon || "", iconType: input.iconType || "emoji",
-      note: input.note || "", ytLinkCat: input.ytLinkCat || null, folderId: input.folderId || null, archived: false,
+      note: input.note || "", ytLinkCat: input.ytLinkCat || null, ytLinkVidCat: input.ytLinkVidCat || null, folderId: input.folderId || null, archived: false,
       order: 0, deletedAt: null,
     };
     setDb((d) => { h.order = T.nextOrder(d.habits || []); return { ...d, habits: [...(d.habits || []), h] }; });

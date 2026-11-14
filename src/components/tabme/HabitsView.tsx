@@ -56,17 +56,22 @@ const fmtClock = (sec: number) => {
 
 export function HabitsView() {
   const tc = useTC();
-  const { goHome, goFolder, liveHabits, liveYtListCats, openModal } = useApp();
+  const { goHome, goFolder, liveHabits, liveYtListCats, liveYtVidCats, openModal } = useApp();
   const dragRef = useRef<DragState>(null);
   const [off, setOff] = useState(0);
   const [showArch, setShowArch] = useState(false);
-  const [timer, setTimer] = useState<{ id: string; start: number } | null>(null);
+  /* v2.5.2: el cronómetro ya NO vive en el estado de esta vista — vive
+     en los ajustes (Supabase), así que sobrevive a cambiar de vista o
+     de pestaña, a que el iPad recargue la página y a cerrar y reabrir
+     la app, siempre contando por hora real desde su arranque */
+  const timer = tc.db.settings.habitTimer || null;
   const [, tick] = useReducer((x: number) => x + 1, 0);
 
   const days = tc.db.habitDays || [];
   const habits = liveHabits().filter((h) => !h.archived).sort(T.byOrder);
   const archived = liveHabits().filter((h) => h.archived).sort(T.byOrder);
   const listCats = liveYtListCats();
+  const vidCats = liveYtVidCats();
   const todayK = T.localDStr(new Date());
   const doneToday = habits.filter((h) => { const e = habEntry(days, h.id, todayK); return e && e.done; }).length;
 
@@ -78,9 +83,8 @@ export function HabitsView() {
   const winLabel = win[0].toLocaleDateString("es-ES", { day: "numeric", month: "short" }) +
     " – " + win[13].toLocaleDateString("es-ES", { day: "numeric", month: "short" });
 
-  /* cronómetro (v2.5.1): repintar cada segundo; el tiempo se calcula
-     por hora real desde el arranque — NO se pausa al cambiar de
-     pestaña ni de web, mientras la pestaña de BookDPB siga abierta */
+  /* cronómetro: repintar cada segundo; el tiempo se calcula por hora
+     real desde el arranque guardado en los ajustes (v2.5.2) */
   useEffect(() => {
     if (!timer) return;
     const iv = setInterval(tick, 1000);
@@ -92,7 +96,9 @@ export function HabitsView() {
   const stopTimer = async (save: boolean) => {
     if (!timer) return;
     const t = timer;
-    setTimer(null);
+    /* primero se apaga en los ajustes: si algo fallara después, no
+       quedaría un cronómetro fantasma sumando en segundo plano */
+    tc.updateSettings({ habitTimer: null });
     const secs = elapsedOf(t);
     const h = (tc.db.habits || []).find((x) => x.id === t.id);
     if (!h) return;
@@ -106,8 +112,16 @@ export function HabitsView() {
   const toggleTimer = (h: T.Habit) => {
     if (timer && timer.id === h.id) { void stopTimer(true); return; }
     if (timer) void stopTimer(true);
-    setTimer({ id: h.id, start: Date.now() });
+    tc.updateSettings({ habitTimer: { id: h.id, start: Date.now() } });
   };
+
+  /* si el hábito del cronómetro en marcha se archivó o se borró, el
+     cronómetro se apaga solo sin sumar (no hay fila donde detenerlo) —
+     solo cuando los hábitos ya cargaron, para no matar un cronómetro
+     legítimo restaurado al arrancar la app */
+  const timerOrphan = !!timer && (tc.db.habits || []).length > 0 &&
+    !liveHabits().some((x) => x.id === timer.id && !x.archived);
+  useEffect(() => { if (timerOrphan) void stopTimer(false); }, [timerOrphan]);
 
   const toggleDay = (h: T.Habit, key: string) => {
     const e = habEntry(days, h.id, key);
@@ -188,6 +202,7 @@ export function HabitsView() {
               const streak = habStreak(days, h.id);
               const todayE = habEntry(days, h.id, todayK);
               const linked = h.ytLinkCat ? listCats.find((c) => c.id === h.ytLinkCat) : null;
+              const linkedVid = h.ytLinkVidCat ? vidCats.find((c) => c.id === h.ytLinkVidCat) : null;
               const linkedFolder = h.folderId ? (tc.db.folders || []).find((f) => f.id === h.folderId && !f.deletedAt) : null;
               const running = !!timer && timer.id === h.id;
               return (
@@ -225,6 +240,7 @@ export function HabitsView() {
                       {"🏆 " + total + " · 🔥 " + streak}
                       {todayE && todayE.seconds ? " · ⏱ hoy " + T.fmtInvested(todayE.seconds) : ""}
                       {linked ? " · 🔗 " + linked.name : ""}
+                      {linkedVid ? " · 🔗 🎞️ " + linkedVid.name : ""}
                       {linkedFolder ? <> · <button className="hab-linkchip" title="Abrir su carpeta de recursos vinculada" onClick={() => goFolder(linkedFolder.id)}>📁 {linkedFolder.name}</button></> : null}
                     </span>
                   </div>
@@ -248,8 +264,10 @@ export function HabitsView() {
                   <span className="hab-acts">
                     {running ? <span className="hab-clock">{fmtClock(elapsedOf(timer))}</span> : null}
                     <button className={"icon-btn hab-timer" + (running ? " on" : "")}
-                      title={running ? "Detener y sumar el tiempo" : "Cronómetro: cuenta por hora real — sigue aunque cambies de pestaña o de web"}
+                      title={running ? "Detener y sumar el tiempo" : "Cronómetro: cuenta por hora real y queda guardado — sigue aunque cambies de vista, de pestaña o cierres la app"}
                       onClick={() => toggleTimer(h)}>{running ? "⏹" : "▶"}</button>
+                    {running ? <button className="icon-btn" title="Cancelar el cronómetro SIN guardar el tiempo"
+                      onClick={() => void stopTimer(false)}>✕</button> : null}
                     <button className="icon-btn" title="Editar hábito"
                       onClick={() => openModal("habit", { id: h.id })}>✎</button>
                   </span>
@@ -258,8 +276,8 @@ export function HabitsView() {
             })}
           </div>
           <p className="hab-foot">
-            El cronómetro ▶ cuenta por hora real: sigue sumando aunque cambias de pestaña o de web, mientras la pestaña de BookDPB siga abierta en el navegador.
-            Si un hábito está vinculado a una categoría de listas, el tiempo de sus vídeos también suma y marca el día al llegar a 1 minuto.
+            El cronómetro ▶ cuenta por hora real y queda guardado: sigue sumando aunque cambies de vista, de pestaña o de web, y aunque cierres y reabras la app — al volver lo verás en marcha donde lo dejaste. Con ✕ lo cancelas sin guardar.
+            Si un hábito está vinculado a una categoría de listas o de vídeos sueltos, el tiempo de sus vídeos también suma y marca el día al llegar a 1 minuto.
           </p>
         </>
       )}

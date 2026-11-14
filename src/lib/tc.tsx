@@ -70,7 +70,7 @@ export type YtVideo = {
    listas vinculada) y estadísticas por periodos. */
 export type Habit = {
   id: string; name: string; color: string; icon: string; iconType: string;
-  note: string; ytLinkCat: string | null; folderId: string | null; archived: boolean;
+  note: string; ytLinkCat: string | null; ytLinkVidCat: string | null; folderId: string | null; archived: boolean;
   order: number; deletedAt: number | null;
 };
 /* Un día de un hábito: hecho o no, y los segundos registrados ese día */
@@ -97,6 +97,9 @@ export type Settings = {
   sidebarLayout: string[]; tagColors: Record<string, string>;
   ytOrder: string[]; ytCollapsedCats: string[];
   ytCollapsedListCats: string[]; ytCollapsedVidCats: string[];
+  /* v2.5.2: cronómetro de Hábitos en marcha — vive en los ajustes
+     (Supabase) para sobrevivir a cambios de vista, recargas y cierres */
+  habitTimer: { id: string; start: number } | null;
 };
 export type DB = {
   spaces: Space[]; folders: Folder[]; bookmarks: Bookmark[]; notes: NoteT[];
@@ -423,5 +426,5 @@ export const DEFAULT_SETTINGS: Settings = {
   collapsedFolders: {}, expandedSpaces: {}, expandedItems: {},
   viewModes: {}, cardZoom: 1, itemOrder: [], itemExpanded: {},
   sidebarLayout: [], tagColors: {}, ytOrder: [], ytCollapsedCats: [],
-  ytCollapsedListCats: [], ytCollapsedVidCats: [],
+  ytCollapsedListCats: [], ytCollapsedVidCats: [], habitTimer: null,
 };

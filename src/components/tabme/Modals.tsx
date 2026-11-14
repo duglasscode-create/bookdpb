@@ -1864,14 +1864,19 @@ function ColorPickModal({ current, onPick }: { current?: string; onPick?: (hex: 
 
 function HabitModal({ id }: { id?: string }) {
   const tc = useTC();
-  const { closeModal, liveYtListCats } = useApp();
+  const { closeModal, liveYtListCats, liveYtVidCats } = useApp();
   const edit = id ? (tc.db.habits || []).find((h) => h.id === id) : undefined;
   const nameRef = useRef<HTMLInputElement>(null);
   const colorRef = useRef(edit ? edit.color : "#22c55e");
   const iconRef = useRef({ icon: edit ? edit.icon : "", iconType: edit ? edit.iconType : "emoji" });
-  const [link, setLink] = useState<string>(edit ? (edit.ytLinkCat || "") : "");
+  /* v2.5.2: el vínculo puede ser a una categoría de Listas («L:») o de
+     Vídeos sueltos («V:») — un solo desplegable con los dos grupos */
+  const [link, setLink] = useState<string>(edit
+    ? (edit.ytLinkCat ? "L:" + edit.ytLinkCat : edit.ytLinkVidCat ? "V:" + edit.ytLinkVidCat : "")
+    : "");
   const [folder, setFolder] = useState<string>(edit ? (edit.folderId || "") : "");
   const listCats = liveYtListCats().sort(T.byOrder);
+  const vidCats = liveYtVidCats().sort(T.byOrder);
   const folders = (tc.db.folders || []).filter((f) => !f.deletedAt).sort(T.byOrder);
   const folderLabel = (f: T.Folder) => {
     const sp = (tc.db.spaces || []).find((x) => x.id === f.spaceId);
@@ -1883,11 +1888,13 @@ function HabitModal({ id }: { id?: string }) {
     const name = nameRef.current?.value.trim() || "";
     if (!name) { tc.toast("Escribe un nombre"); return; }
     const ic = iconRef.current;
+    const ytLinkCat = link.startsWith("L:") ? link.slice(2) : null;
+    const ytLinkVidCat = link.startsWith("V:") ? link.slice(2) : null;
     if (edit) {
-      await tc.saveHabit({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null, folderId: folder || null });
+      await tc.saveHabit({ ...edit, name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat, ytLinkVidCat, folderId: folder || null });
       tc.toast("Hábito guardado");
     } else {
-      await tc.createHabit({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat: link || null, folderId: folder || null });
+      await tc.createHabit({ name, color: colorRef.current, icon: ic.icon, iconType: ic.iconType, ytLinkCat, ytLinkVidCat, folderId: folder || null });
       tc.toast("Hábito creado");
     }
     closeModal();
@@ -1918,9 +1925,14 @@ function HabitModal({ id }: { id?: string }) {
       <div className="field"><label>Vincular a Youtube Manager (opcional)</label>
         <select value={link} onChange={(e) => setLink(e.target.value)}>
           <option value="">Sin vínculo</option>
-          {listCats.map((c) => <option key={c.id} value={c.id}>🎬 Listas · {c.name}</option>)}
+          <optgroup label="🎬 Listas">
+            {listCats.map((c) => <option key={c.id} value={"L:" + c.id}>{c.name}</option>)}
+          </optgroup>
+          <optgroup label="🎞️ Vídeos sueltos">
+            {vidCats.map((c) => <option key={c.id} value={"V:" + c.id}>{c.name}</option>)}
+          </optgroup>
         </select>
-        <p className="ip-hint">Si lo vinculas, el tiempo que veas de vídeos de esa categoría de listas suma solo a este hábito y marca el día al llegar a 1 minuto.</p>
+        <p className="ip-hint">Si lo vinculas, el tiempo que veas de vídeos de esa categoría — de listas o de vídeos sueltos — suma solo a este hábito y marca el día al llegar a 1 minuto.</p>
       </div>
       <div className="field"><label>Carpeta de recursos vinculada (opcional)</label>
         <select value={folder} onChange={(e) => setFolder(e.target.value)}>
@@ -1947,7 +1959,7 @@ function HabitModal({ id }: { id?: string }) {
 
 function HabitStatsModal({ id }: { id?: string }) {
   const tc = useTC();
-  const { closeModal, liveYtListCats } = useApp();
+  const { closeModal, liveYtListCats, liveYtVidCats } = useApp();
   const h = (tc.db.habits || []).find((x) => x.id === id);
   const [period, setPeriod] = useState(30);
   const [tab, setTab] = useState("stats");
@@ -1989,6 +2001,7 @@ function HabitStatsModal({ id }: { id?: string }) {
   }
   const pct = (done + missed) ? Math.round((done / (done + missed)) * 100) : 0;
   const linked = h.ytLinkCat ? liveYtListCats().find((c) => c.id === h.ytLinkCat) : null;
+  const linkedVid = h.ytLinkVidCat ? liveYtVidCats().find((c) => c.id === h.ytLinkVidCat) : null;
   const chips: [number, string][] = [[7, "Semana"], [30, "Mes"], [90, "3 meses"], [180, "6 meses"], [3650, "Desde el inicio"]];
 
   return (
@@ -2039,6 +2052,7 @@ function HabitStatsModal({ id }: { id?: string }) {
           </div>
           <p className="ip-hint">
             {linked ? "🔗 Vinculado a la categoría de listas «" + linked.name + "»: su tiempo de vídeo suma solo. " : ""}
+            {linkedVid ? "🔗 Vinculado a la categoría de vídeos sueltos «" + linkedVid.name + "»: su tiempo de vídeo suma solo. " : ""}
             Tiempo total registrado: {totalSecs ? T.fmtInvested(totalSecs) : "0 min"}.
             Los fallados se cuentan solos: días del periodo sin marcar (hoy no cuenta, el día no ha terminado).
           </p>
