@@ -39,6 +39,8 @@ type AppCtx = {
   goYtListCat: (id: string | null) => void;
   goYtVidCat: (id: string | null) => void;
   liveHabits: () => T.Habit[];
+  liveTodoCats: () => T.TodoCat[];
+  liveTodoTasks: () => T.TodoTask[];
   liveYtLists: () => T.YtList[];
   liveYtVideos: () => T.YtVideo[];
   liveYtCats: () => T.YtCategory[];
@@ -253,6 +255,8 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     const main = document.getElementById("main"); if (main) main.scrollTop = 0;
   }, [setUi]);
   const liveHabits = useCallback(() => (db.habits || []).filter((h) => !h.deletedAt), [db]);
+  const liveTodoCats = useCallback(() => (db.todoCats || []).slice().sort(T.byOrder), [db]);
+  const liveTodoTasks = useCallback(() => (db.todoTasks || []).filter((t) => !t.deletedAt), [db]);
 
   const trashEntries = useCallback(() => {
     const out: { kind: string; label: string; icon: string; id: string; name: string; deletedAt: number }[] = [];
@@ -272,6 +276,7 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     push("ytvidcats", "Categoría de vídeos", "🎞️", db.ytVidCats || [], (x) => x.name);
     push("ytloose", "Video suelto", "🎞️", db.ytLooseVideos || [], (x) => x.title);
     push("habits", "Hábito", "🌱", db.habits || [], (x) => x.name);
+    push("todos", "Tarea", "✅", db.todoTasks || [], (x) => x.title);
     return out.sort((a, b) => b.deletedAt - a.deletedAt);
   }, [db]);
 
@@ -303,11 +308,12 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
     if (key === "reminders") return liveReminders().filter((r) => !r.done).length;
     if (key === "favorites") return liveBookmarks().filter((b) => b.favorite).length;
     if (key === "history") return db.activity.length;
+    if (key === "tasks") return liveTodoTasks().filter((t) => !t.done).length;
     if (key === "trash") return trashEntries().length;
     if (key === "readlater")
       return liveBookmarks().filter((b) => b.readLater).length + liveNotes().filter((n) => n.readLater).length;
     return 0;
-  }, [db, liveAccounts, liveAssistants, liveReminders, liveBookmarks, liveNotes, trashEntries]);
+  }, [db, liveAccounts, liveAssistants, liveReminders, liveBookmarks, liveNotes, trashEntries, liveTodoTasks]);
 
   const itemPreview = useCallback((key: string): { name: string; sub: string }[] => {
     if (key === "accounts") return liveAccounts().slice().sort(T.byOrder).slice(0, 5)
@@ -332,7 +338,7 @@ export function AppProvider({ ui, setUi, modal, openModal, closeModal, openDd, s
 
   const value: AppCtx = {
     ui, setUi, goHome, goSpace, goFolder, goItem, goTag,
-    goYt, goYtList, goYtSubCat, goYtListCat, goYtVidCat, liveHabits, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels,
+    goYt, goYtList, goYtSubCat, goYtListCat, goYtVidCat, liveHabits, liveTodoCats, liveTodoTasks, liveYtLists, liveYtVideos, liveYtCats, liveYtChannels,
     liveYtListCats, liveYtVidCats, liveYtLooseVideos, ytListById,
     ytPlayer, playYt, playLoose, stopYt,
     modal, openModal, closeModal, openDd, setOpenDd,

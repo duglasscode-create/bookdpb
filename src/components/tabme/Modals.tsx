@@ -1860,6 +1860,101 @@ function ColorPickModal({ current, onPick }: { current?: string; onPick?: (hex: 
   );
 }
 
+/* ---------- v2.6.0: modales de Tareas (Mis Items) ---------- */
+
+function TodoTaskModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal, liveTodoCats } = useApp();
+  const edit = id ? (tc.db.todoTasks || []).find((t) => t.id === id) : undefined;
+  const [title, setTitle] = useState(edit ? edit.title : "");
+  const [catId, setCatId] = useState(edit?.catId || "");
+  const cats = liveTodoCats();
+  const save = async () => {
+    if (!title.trim()) { tc.toast("Escribe un título para la tarea"); return; }
+    if (edit) { await tc.saveTodoTask({ ...edit, title: title.trim(), catId: catId || null }); tc.toast("Tarea guardada ✓"); }
+    else { await tc.createTodoTask({ title: title.trim(), catId: catId || null }); tc.toast("Tarea creada ✓"); }
+    closeModal();
+  };
+  return (
+    <div className="modal">
+      <h3>{edit ? "✎ Editar tarea" : "＋ Nueva tarea"}</h3>
+      <div className="m-field">
+        <label>Título</label>
+        <input type="text" placeholder="p. ej. Pagar la luz" autoFocus value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void save(); }} />
+      </div>
+      <div className="m-field">
+        <label>Categoría</label>
+        <select value={catId} onChange={(e) => setCatId(e.target.value)}>
+          <option value="">Sin categoría</option>
+          {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <div className="m-hint">Las categorías se crean y editan con «＋ Nueva categoría» en la página de Tareas.</div>
+      </div>
+      <div className="m-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" onClick={() => void save()}>Guardar</button>
+      </div>
+    </div>
+  );
+}
+
+function TodoCatModal({ id }: { id?: string }) {
+  const tc = useTC();
+  const { closeModal } = useApp();
+  const edit = id ? (tc.db.todoCats || []).find((c) => c.id === id) : undefined;
+  const [name, setName] = useState(edit ? edit.name : "");
+  const [color, setColor] = useState(edit ? edit.color : "#2dd4bf");
+  const [icon, setIcon] = useState(edit ? edit.icon : "");
+  const [iconType, setIconType] = useState(edit ? edit.iconType : "emoji");
+  const save = async () => {
+    if (!name.trim()) { tc.toast("Escribe un nombre para la categoría"); return; }
+    if (edit) {
+      await tc.saveTodoCat({ ...edit, name: name.trim(), color, icon, iconType });
+      tc.toast("Categoría guardada ✓");
+    } else {
+      await tc.createTodoCat({ name: name.trim(), color, icon, iconType });
+      tc.toast("Categoría creada ✓");
+    }
+    closeModal();
+  };
+  const del = async () => {
+    if (!edit) return;
+    const n = (tc.db.todoTasks || []).filter((t) => t.catId === edit.id && !t.deletedAt).length;
+    if (!confirm("¿Borrar la categoría «" + edit.name + "»?" +
+      (n ? " Sus " + n + " tarea(s) no se borran: quedan «Sin categoría»." : "") +
+      " La categoría sí se elimina del todo.")) return;
+    await tc.deleteTodoCat(edit.id);
+    tc.toast("Categoría borrada");
+    closeModal();
+  };
+  return (
+    <div className="modal">
+      <h3>{edit ? "✎ Editar categoría" : "＋ Nueva categoría"}</h3>
+      <div className="m-field">
+        <label>Nombre</label>
+        <input type="text" placeholder="p. ej. Cursos, Casa, Salud…" autoFocus value={name}
+          onChange={(e) => setName(e.target.value)} />
+      </div>
+      <YtCatIconPicker icon={icon} iconType={iconType}
+        onPick={(v) => { setIcon(v.icon); setIconType(v.iconType); }} />
+      <ColorField value={color} onChange={setColor} />
+      <div className="m-actions">
+        <button className="btn" onClick={closeModal}>Cancelar</button>
+        <button className="btn primary" onClick={() => void save()}>Guardar</button>
+      </div>
+      {edit ? (
+        <div className="m-danger-zone">
+          <div className="mdz-title">Zona peligrosa</div>
+          <button className="btn danger" onClick={() => void del()}>🗑️ Borrar categoría</button>
+          <div className="m-hint">Se elimina del todo. Sus tareas quedan «Sin categoría», no se borran.</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /* ---------- v2.5.0: modal crear/editar hábito ---------- */
 
 function HabitModal({ id }: { id?: string }) {
@@ -1877,7 +1972,33 @@ function HabitModal({ id }: { id?: string }) {
   const [folder, setFolder] = useState<string>(edit ? (edit.folderId || "") : "");
   const listCats = liveYtListCats().sort(T.byOrder);
   const vidCats = liveYtVidCats().sort(T.byOrder);
-  const folders = (tc.db.folders || []).filter((f) => !f.deletedAt).sort(T.byOrder);
+  const allFolders = (tc.db.folders || []).filter((f) => !f.deletedAt).sort(T.byOrder);
+  /* v2.6.0: la carpeta vinculada sale SOLO de «Cursos» (el space o la
+     carpeta raíz con ese nombre): todas sus carpetas, incluidas las
+     que se creen en el futuro. Si «Cursos» no se encuentra, se
+     ofrecen todas para no romper nunca el selector. Una carpeta ya
+     vinculada que quede fuera se mantiene visible, para no
+     desvincularla sin querer al guardar. */
+  const cursosSpace = (tc.db.spaces || []).find((s) => !s.deletedAt && s.name.trim().toLowerCase() === "cursos");
+  const cursosRoot = !cursosSpace
+    ? allFolders.find((f) => !f.parentId && f.name.trim().toLowerCase() === "cursos")
+    : undefined;
+  let folders = allFolders;
+  if (cursosSpace) folders = allFolders.filter((f) => f.spaceId === cursosSpace.id);
+  else if (cursosRoot) {
+    const ids = new Set<string>([cursosRoot.id]);
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const f of allFolders) if (f.parentId && ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true; }
+    }
+    folders = allFolders.filter((f) => ids.has(f.id));
+  }
+  const cursosScoped = !!(cursosSpace || cursosRoot);
+  if (edit?.folderId && !folders.some((f) => f.id === edit.folderId)) {
+    const cur = allFolders.find((f) => f.id === edit.folderId);
+    if (cur) folders = [cur, ...folders];
+  }
   const folderLabel = (f: T.Folder) => {
     const sp = (tc.db.spaces || []).find((x) => x.id === f.spaceId);
     const par = f.parentId ? (tc.db.folders || []).find((x) => x.id === f.parentId) : null;
@@ -1939,7 +2060,7 @@ function HabitModal({ id }: { id?: string }) {
           <option value="">Sin vínculo</option>
           {folders.map((f) => <option key={f.id} value={f.id}>{folderLabel(f)}</option>)}
         </select>
-        <p className="ip-hint">Acceso directo desde la fila del hábito a su carpeta de marcadores: p. ej. la carpeta de recursos de este curso.</p>
+        <p className="ip-hint">Acceso directo desde la fila del hábito a su carpeta de marcadores: p. ej. la carpeta de recursos de este curso.{cursosScoped ? " Solo se ofrecen las carpetas que viven dentro de «Cursos»." : ""}</p>
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={closeModal}>Cancelar</button>
@@ -2092,6 +2213,8 @@ export function Modals() {
     case "ytvidcat": return <YtVidCatModal id={p.id} />;
     case "ytloosevideo": return <YtLooseVideoModal catId={p.catId} />;
     case "habit": return <HabitModal id={p.id} />;
+    case "todo": return <TodoTaskModal id={p.id} />;
+    case "todocat": return <TodoCatModal id={p.id} />;
     case "habitstats": return <HabitStatsModal id={p.id} />;
     case "colorPick": return <ColorPickModal current={p.current} onPick={p.onPick} />;
     default: return null;

@@ -77,6 +77,18 @@ export type Habit = {
 export type HabitDay = {
   habitId: string; day: string; done: boolean; seconds: number;
 };
+/* v2.6.0: Tareas de Mis Items — categorías propias (color e icono como
+   las demás categorías) y la tarea del día: al marcarla hecha baja a
+   «Completadas» de ese día; las pendientes de días anteriores siguen
+   en la lista hasta hacerse. Borrar = papelera global. */
+export type TodoCat = {
+  id: string; name: string; color: string; icon: string; iconType: string;
+  order: number;
+};
+export type TodoTask = {
+  id: string; catId: string | null; title: string; done: boolean;
+  day: string; doneDay: string | null; order: number; deletedAt: number | null;
+};
 export type YtCategory = {
   id: string; name: string; color: string; icon: string; iconType: string;
   order: number; deletedAt: number | null;
@@ -108,6 +120,7 @@ export type DB = {
   ytLists: YtList[]; ytVideos: YtVideo[]; ytCats: YtCategory[]; ytChannels: YtChannel[];
   ytListCats: YtListCat[]; ytVidCats: YtVidCat[]; ytLooseVideos: YtLooseVideo[];
   habits: Habit[]; habitDays: HabitDay[];
+  todoCats: TodoCat[]; todoTasks: TodoTask[];
 };
 
 /* ---------- Constantes literales del original ---------- */
@@ -149,6 +162,8 @@ export const DT_YTLISTCAT = 'application/x-tbc-ytlistcat';
 export const DT_YTVIDCAT = 'application/x-tbc-ytvidcat';
 export const DT_YTLOOSE = 'application/x-tbc-ytloose';
 export const DT_HABIT = 'application/x-tbc-habit';
+export const DT_TODOCAT = 'application/x-tbc-todocat';
+export const DT_TODOTASK = 'application/x-tbc-todotask';
 
 /* Iconos UI (línea) para las categorías de Youtube Manager (v2.4.0).
    Se guardan como iconType "ui" + icon = id de esta lista. */
@@ -219,6 +234,7 @@ export const ITEM_DEFS: Record<string, { label: string; icon: string; hint: stri
   history: { label: 'Historial', icon: '🕘', hint: 'Actividad reciente' },
   trash: { label: 'Papelera', icon: '🗑', hint: 'Elementos eliminados (30 días)' },
   readlater: { label: 'Haciendo', icon: '🔖', hint: 'En curso' },
+  tasks: { label: 'Tareas', icon: '✅', hint: 'Tus tareas del día, por categorías' },
 };
 
 /* ---------- Utilidades literales del original ---------- */

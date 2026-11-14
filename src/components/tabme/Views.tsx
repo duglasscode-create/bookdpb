@@ -9,6 +9,7 @@ import { useApp, useDnD } from "./tc-ui";
 import { NotePopover } from "./NotesView";
 import { YtListsView, YtListView, YtListCatView, YtSubsView, YtSubCatView, YtDoneView, YtLooseView, YtVidCatView } from "./YoutubeViews";
 import { HabitsView } from "./HabitsView";
+import { TodosView } from "./TodosView";
 
 type DragState = { type: string; id: string } | null;
 
@@ -748,9 +749,15 @@ function UnusedView({ dragRef }: { dragRef: React.MutableRefObject<DragState> })
 /* ---------- Mis Items ---------- */
 
 function MisItemsView() {
+  const tc = useTC();
   const { goItem, getViewMode, itemCount } = useApp();
   const mode = getViewMode("misitems");
-  const keys = ["accounts", "reminders", "favorites", "history", "trash", "readlater"];
+  /* v2.6.0: la página sigue el MISMO orden que el sidebar — el que
+     Duglass deja arrastrando las filas (settings.itemOrder); antes
+     usaba una lista fija y el arrastre del sidebar no se reflejaba */
+  const ALL_KEYS = ["accounts", "reminders", "favorites", "history", "trash", "readlater", "tasks"];
+  const savedOrder = (tc.db.settings.itemOrder || []).filter((k) => ALL_KEYS.includes(k));
+  const keys = savedOrder.concat(ALL_KEYS.filter((k) => !savedOrder.includes(k)));
   const def = { icon: "🗂", label: "Mis Items", hint: "Todos tus items en un vistazo" };
   const counts: Record<string, number> = {};
   keys.forEach((k) => { counts[k] = itemCount(k); });
@@ -1199,6 +1206,7 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "ytvidcats") await tc.restoreYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.restoreYtLooseVideo(t.id);
     else if (t.kind === "habits") await tc.restoreHabit(t.id);
+    else if (t.kind === "todos") await tc.restoreTodoTask(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1218,6 +1226,7 @@ function TrashRow({ t }: { t: { kind: string; label: string; icon: string; id: s
     else if (t.kind === "ytvidcats") await tc.purgeYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.purgeYtLooseVideo(t.id);
     else if (t.kind === "habits") await tc.purgeHabit(t.id);
+    else if (t.kind === "todos") await tc.purgeTodoTask(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (
@@ -1252,6 +1261,7 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "ytvidcats") await tc.restoreYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.restoreYtLooseVideo(t.id);
     else if (t.kind === "habits") await tc.restoreHabit(t.id);
+    else if (t.kind === "todos") await tc.restoreTodoTask(t.id);
     tc.toast("Restaurado");
   };
   const purge = async () => {
@@ -1271,6 +1281,7 @@ function TrashCard({ t }: { t: { kind: string; label: string; icon: string; id: 
     else if (t.kind === "ytvidcats") await tc.purgeYtVidCat(t.id);
     else if (t.kind === "ytloose") await tc.purgeYtLooseVideo(t.id);
     else if (t.kind === "habits") await tc.purgeHabit(t.id);
+    else if (t.kind === "todos") await tc.purgeTodoTask(t.id);
     tc.toast("Eliminado para siempre");
   };
   return (
@@ -1439,6 +1450,7 @@ export function Views() {
   else if (v === "misitems") body = <MisItemsView />;
   else if (v === "accounts") body = <AccountsView vkey="accounts" />;
   else if (v === "reminders") body = <RemindersView />;
+  else if (v === "tasks") body = <TodosView />;
   else if (v === "favorites") body = <FavoritesView dragRef={dragRef} />;
   else if (v === "history") body = <HistoryView />;
   else if (v === "trash") body = <TrashView />;

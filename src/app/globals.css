@@ -1219,7 +1219,7 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .yt-vcard.playing { box-shadow: 0 0 0 2px var(--accent); }
 .yt-thumb { position: relative; aspect-ratio: 16 / 9; background: #111; flex: 0 0 auto; }
 .yt-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.yt-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 46px; height: 34px; background: rgba(15,15,15,.82); color: #fff; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; pointer-events: none; }
+.yt-thumb .yt-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 46px; height: 34px; background: rgba(15,15,15,.82); color: #fff; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; pointer-events: none; }
 .yt-dur { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,.8); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 5px; }
 .yt-noembed-badge { position: absolute; bottom: 8px; left: 8px; background: rgba(0,0,0,.65); border-radius: 6px; padding: 1px 6px; font-size: 12px; }
 .yt-vprog { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.35); }
@@ -1354,8 +1354,8 @@ body:not(.sb-open):not(.sb-pinned) .sidebar .item-row {
 .yt-ibtn { border: none; background: transparent; font-size: 15px; cursor: pointer; width: 42px; height: 42px; border-radius: 50%; color: var(--text); padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; overflow: hidden; line-height: 0; }
 .yt-ibtn svg { display: block; }
 .yt-ibtn:hover { background: var(--card-2); }
-.yt-ibtn.yt-play { width: 48px; height: 48px; background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
-.yt-ibtn.yt-play:hover { background: var(--accent); filter: brightness(1.1); }
+.yt-ibtn.yt-playbtn { width: 48px; height: 48px; background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.yt-ibtn.yt-playbtn:hover { background: var(--accent); filter: brightness(1.1); }
 .yt-ibtn.on { color: var(--accent); background: var(--accent-soft); }
 .yt-track { display: flex; align-items: center; gap: 9px; width: 100%; max-width: 560px; color: var(--muted); font-size: 11.5px; }
 .yt-progress { flex: 1; height: 5px; background: var(--card-2); border-radius: 5px; overflow: hidden; cursor: pointer; }
@@ -1460,3 +1460,27 @@ body.yt-open .sidebar { padding-bottom: 96px; }
 /* Hábito: acceso directo a su carpeta de recursos */
 .hab-linkchip { background: none; border: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
 .hab-linkchip:hover { text-decoration: underline; }
+
+/* ===== v2.6.0: Tareas de Mis Items ===== */
+.tk-strip { display: flex; gap: 9px; flex-wrap: wrap; margin: 4px 0 6px; }
+.tk-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 1.6px solid var(--border); border-radius: 999px; padding: 5px 8px 5px 9px; cursor: pointer; font-size: 13.5px; user-select: none; box-shadow: var(--shadow); }
+.tk-chip[draggable="true"] { cursor: grab; }
+.tk-chip.sel { border-color: var(--accent); background: var(--accent-soft); }
+.tk-chip.drop-ok { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.tk-cic { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex: 0 0 24px; font-size: 13px; color: #fff; }
+.tk-cic img { width: 100%; height: 100%; object-fit: cover; }
+.tk-cc { color: var(--muted); font-size: 12px; }
+.tk-cedit { border: none; background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 4px; border-radius: 6px; }
+.tk-cedit:hover { background: var(--border); color: var(--text); }
+.tk-sec { font-size: 15.5px; font-weight: 700; margin: 18px 0 9px; }
+.tk-list { display: flex; flex-direction: column; gap: 8px; }
+.tk-row { display: flex; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--border); border-left: 5px solid var(--muted); border-radius: 12px; padding: 9px 12px; box-shadow: var(--shadow); }
+.tk-row.drop-before { box-shadow: 0 -3px 0 0 var(--accent); }
+.tk-row.dragging { opacity: .45; }
+.tk-grip { color: var(--muted); cursor: grab; font-size: 13px; }
+.tk-check { width: 19px; height: 19px; accent-color: #22c55e; cursor: pointer; flex: 0 0 auto; }
+.tk-title { flex: 1; min-width: 0; text-align: left; background: none; border: none; padding: 0; font: inherit; font-size: 14.5px; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-row.done .tk-title { text-decoration: line-through; color: var(--muted); }
+.tk-cat { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); background: var(--card-2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px 2px 3px; flex: 0 0 auto; }
+.tk-cat .tk-cic { width: 16px; height: 16px; flex-basis: 16px; font-size: 10px; }
+.tk-empty { color: var(--muted); border: 1.4px dashed var(--border); border-radius: 12px; padding: 16px; text-align: center; }

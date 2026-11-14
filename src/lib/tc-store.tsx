@@ -154,6 +154,18 @@ type Ctx = {
   reorderHabits: (dragId: string, beforeId: string | null) => Promise<void>;
   setHabitDay: (habitId: string, day: string, patch: { done?: boolean; seconds?: number }) => Promise<void>;
   addHabitTime: (habitId: string, addSeconds: number) => Promise<void>;
+  /* v2.6.0: Tareas de Mis Items */
+  createTodoCat: (input: Partial<T.TodoCat>) => Promise<T.TodoCat>;
+  saveTodoCat: (c: T.TodoCat) => Promise<void>;
+  deleteTodoCat: (id: string) => Promise<void>;
+  reorderTodoCats: (dragId: string, beforeId: string | null) => Promise<void>;
+  createTodoTask: (input: Partial<T.TodoTask>) => Promise<T.TodoTask>;
+  saveTodoTask: (t: T.TodoTask) => Promise<void>;
+  toggleTodoTask: (id: string) => Promise<void>;
+  deleteTodoTask: (id: string) => Promise<void>;
+  restoreTodoTask: (id: string) => Promise<void>;
+  purgeTodoTask: (id: string) => Promise<void>;
+  reorderTodoTasks: (dragId: string, beforeId: string | null) => Promise<void>;
   /* activity + trash */
   logActivity: (type: string, text: string, detail?: string) => Promise<void>;
   clearActivity: () => Promise<void>;
@@ -176,7 +188,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     accounts: [], assistants: [], reminders: [], activity: [],
     ytLists: [], ytVideos: [], ytCats: [], ytChannels: [],
     ytListCats: [], ytVidCats: [], ytLooseVideos: [],
-    habits: [], habitDays: [],
+    habits: [], habitDays: [], todoCats: [], todoTasks: [],
     settings: { ...T.DEFAULT_SETTINGS },
   }));
   /* Ref espejo síncrono: permite leer el estado justo después de escribirlo
@@ -213,7 +225,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow, ytl, ytv, ytc, yth, ylc, yvc, ylv, hab, habd] = await Promise.all([
+      const [cols, bms, rels, tgs, bt, nts, acc, asi, rem, act, setRow, ytl, ytv, ytc, yth, ylc, yvc, ylv, hab, habd, tdc, tdt] = await Promise.all([
         supabase.from("collections").select("*").eq("user_id", userId).order("position", { ascending: true }),
         supabase.from("bookmarks").select("*").eq("user_id", userId),
         supabase.from("bookmark_collections").select("bookmark_id, collection_id").eq("user_id", userId),
@@ -237,6 +249,9 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         /* v2.5.0: Hábitos; si las tablas aún no existen, data viene null y se sigue sin ellas */
         supabase.from("habits").select("*").eq("user_id", userId),
         supabase.from("habit_days").select("*").eq("user_id", userId),
+        /* v2.6.0: Tareas de Mis Items; si las tablas aún no existen, data viene null y se sigue sin ellas */
+        supabase.from("todo_cats").select("*").eq("user_id", userId),
+        supabase.from("todo_tasks").select("*").eq("user_id", userId),
       ]);
       const colRows: Record<string, any>[] = (cols.data || []) as Record<string, any>[];
       const spaceRows = colRows.filter((c) => !c.parent_id && !(c as any).is_deleted);
@@ -382,7 +397,39 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
         done: !!r.done, seconds: r.seconds || 0,
       })).filter((r: T.HabitDay) => !!r.day);
 
-      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings, ytLists, ytVideos, ytCats, ytChannels, ytListCats, ytVidCats, ytLooseVideos, habits, habitDays });
+      let todoCats: T.TodoCat[] = ((tdc.data || []) as any[]).map((c: any, i: number) => ({
+        id: c.id, name: c.name || "Categoría", color: c.color || "#2dd4bf",
+        icon: c.icon || "", iconType: c.icon_type || "emoji", order: c.position ?? i,
+      }));
+      /* v2.6.0: primera vez (la tabla existe y está vacía) → las
+         categorías de partida del borrador que Duglass aprobó; desde
+         ahí son suyas: renombrar, recolorear, borrar o crear otras */
+      if (Array.isArray(tdc.data) && tdc.data.length === 0) {
+        const seeds = [
+          { name: "Food", icon: "🍕", color: "#fb7185" },
+          { name: "Workout", icon: "💪", color: "#facc15" },
+          { name: "Work", icon: "💼", color: "#60a5fa" },
+          { name: "Education", icon: "🎒", color: "#4ade80" },
+          { name: "Cursos", icon: "🎓", color: "#2dd4bf" },
+          { name: "Other", icon: "💡", color: "#a78bfa" },
+        ];
+        const created: T.TodoCat[] = [];
+        for (let i = 0; i < seeds.length; i++) {
+          const s = seeds[i];
+          const { data } = await supabase.from("todo_cats")
+            .insert({ user_id: userId, name: s.name, color: s.color, icon: s.icon, icon_type: "emoji", position: i })
+            .select("id").single();
+          created.push({ id: ((data as any)?.id as string) || T.uid("tc"), name: s.name, color: s.color, icon: s.icon, iconType: "emoji", order: i });
+        }
+        todoCats = created;
+      }
+      const todoTasks: T.TodoTask[] = ((tdt.data || []) as any[]).map((t: any, i: number) => ({
+        id: t.id, catId: t.cat_id || null, title: t.title || "Tarea", done: !!t.done,
+        day: String(t.day || "").slice(0, 10), doneDay: t.done_day ? String(t.done_day).slice(0, 10) : null,
+        order: t.position ?? i, deletedAt: t.is_deleted ? (ts(t.deleted_at) || Date.now()) : null,
+      }));
+
+      setDb({ spaces, folders, bookmarks, notes, accounts, assistants, reminders, activity, settings, ytLists, ytVideos, ytCats, ytChannels, ytListCats, ytVidCats, ytLooseVideos, habits, habitDays, todoCats, todoTasks });
       (window as unknown as { __tcSettings?: T.Settings }).__tcSettings = settings;
       settingsReady.current = true;
 
@@ -476,6 +523,13 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase, userId]);
 
   const trashSpace = useCallback(async (id: string) => {
+    /* v2.6.0: el space «Cursos» está protegido: nunca se elimina
+       (sostiene las carpetas vinculadas de los hábitos) */
+    const sp = getDb().spaces.find((s) => s.id === id);
+    if (sp && sp.name.trim().toLowerCase() === "cursos") {
+      toast("🔒 El space «Cursos» está protegido y no se puede eliminar");
+      return;
+    }
     const now = Date.now();
     setDb((d) => {
       const fids = new Set(d.folders.filter((f) => f.spaceId === id).map((f) => f.id));
@@ -569,6 +623,13 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase, userId]);
 
   const trashFolder = useCallback(async (id: string) => {
+    /* v2.6.0: si «Cursos» es una carpeta raíz, está protegida: nunca
+       se elimina (sostiene las carpetas vinculadas de los hábitos) */
+    const fo = getDb().folders.find((f) => f.id === id);
+    if (fo && !fo.parentId && fo.name.trim().toLowerCase() === "cursos") {
+      toast("🔒 La carpeta «Cursos» está protegida y no se puede eliminar");
+      return;
+    }
     const now = Date.now();
     const ids = T.folderTreeIds(getDb().folders, id);
     const idSet = new Set(ids);
@@ -1066,7 +1127,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
   }, [supabase]);
 
   const emptyTrash = useCallback(async () => {
-    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[], ytLists: [] as string[], ytVideos: [] as string[], ytChannels: [] as string[], ytCats: [] as string[], ytListCats: [] as string[], ytVidCats: [] as string[], ytLooseVideos: [] as string[], habits: [] as string[] };
+    const st = { spaces: [] as string[], folders: [] as string[], bookmarks: [] as string[], notes: [] as string[], accounts: [] as string[], assistants: [] as string[], reminders: [] as string[], ytLists: [] as string[], ytVideos: [] as string[], ytChannels: [] as string[], ytCats: [] as string[], ytListCats: [] as string[], ytVidCats: [] as string[], ytLooseVideos: [] as string[], habits: [] as string[], todoTasks: [] as string[] };
     setDb((d) => {
       d.spaces.forEach((s) => { if (s.deletedAt) st.spaces.push(s.id); });
       d.folders.forEach((f) => { if (f.deletedAt) st.folders.push(f.id); });
@@ -1086,6 +1147,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       (d.ytVidCats || []).forEach((c) => { if (c.deletedAt) st.ytVidCats.push(c.id); });
       (d.ytLooseVideos || []).forEach((v) => { if (v.deletedAt) st.ytLooseVideos.push(v.id); });
       (d.habits || []).forEach((h) => { if (h.deletedAt) st.habits.push(h.id); });
+      (d.todoTasks || []).forEach((t) => { if (t.deletedAt) st.todoTasks.push(t.id); });
       return {
         ...d,
         spaces: d.spaces.filter((s) => !s.deletedAt),
@@ -1106,6 +1168,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
           .map((v) => (v.catId && st.ytVidCats.includes(v.catId) ? { ...v, catId: null } : v)),
         habits: (d.habits || []).filter((h) => !h.deletedAt),
         habitDays: (d.habitDays || []).filter((r) => !st.habits.includes(r.habitId)),
+        todoTasks: (d.todoTasks || []).filter((t) => !t.deletedAt),
       };
     });
     if (st.bookmarks.length) {
@@ -1136,6 +1199,7 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
       await supabase.from("habit_days").delete().in("habit_id", st.habits);
       await supabase.from("habits").delete().in("id", st.habits);
     }
+    if (st.todoTasks.length) await supabase.from("todo_tasks").delete().in("id", st.todoTasks);
   }, [supabase]);
 
   /* ----- notas: mover al final ----- */
@@ -2107,6 +2171,122 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     await Promise.all(list.map((h) => supabase.from("habits").update({ position: h.order }).eq("id", h.id)));
   }, [supabase]);
 
+  /* ================= v2.6.0: Tareas de Mis Items — CRUD ================= */
+  const todoCatRow = (c: T.TodoCat) => ({
+    user_id: userId, name: c.name, color: c.color, icon: c.icon || null,
+    icon_type: c.iconType || "emoji", position: c.order ?? 0,
+  });
+  const todoTaskRow = (t: T.TodoTask) => ({
+    user_id: userId, cat_id: t.catId || null, title: t.title, done: !!t.done,
+    day: t.day, done_day: t.doneDay || null, position: t.order ?? 0,
+    is_deleted: !!t.deletedAt, deleted_at: iso(t.deletedAt),
+  });
+
+  const createTodoCat = useCallback(async (input: Partial<T.TodoCat>) => {
+    const c: T.TodoCat = {
+      id: T.uid("tc"), name: input.name || "Nueva categoría",
+      color: input.color || "#2dd4bf", icon: input.icon || "", iconType: input.iconType || "emoji",
+      order: 0,
+    };
+    setDb((d) => { c.order = T.nextOrder(d.todoCats || []); return { ...d, todoCats: [...(d.todoCats || []), c] }; });
+    const { data } = await supabase.from("todo_cats").insert(todoCatRow(c)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== c.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, todoCats: (d.todoCats || []).map((x) => (x.id === c.id ? { ...x, id: nid } : x)) }));
+      return { ...c, id: nid };
+    }
+    return c;
+  }, [supabase, userId]);
+
+  const saveTodoCat = useCallback(async (c: T.TodoCat) => {
+    setDb((d) => ({ ...d, todoCats: (d.todoCats || []).map((x) => (x.id === c.id ? c : x)) }));
+    await supabase.from("todo_cats").update(todoCatRow(c)).eq("id", c.id);
+  }, [supabase, userId]);
+
+  /* Borrar una categoría es definitivo (con su confirmación en el
+     modal, como en el borrador): sus tareas NO se borran, quedan
+     «Sin categoría». */
+  const deleteTodoCat = useCallback(async (id: string) => {
+    setDb((d) => ({
+      ...d,
+      todoCats: (d.todoCats || []).filter((c) => c.id !== id),
+      todoTasks: (d.todoTasks || []).map((t) => (t.catId === id ? { ...t, catId: null } : t)),
+    }));
+    await supabase.from("todo_tasks").update({ cat_id: null }).eq("user_id", userId).eq("cat_id", id);
+    await supabase.from("todo_cats").delete().eq("id", id);
+  }, [supabase, userId]);
+
+  const reorderTodoCats = useCallback(async (dragId: string, beforeId: string | null) => {
+    let list: T.TodoCat[] = [];
+    setDb((d) => {
+      list = (d.todoCats || []).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((c) => [c.id, c.order]));
+      return { ...d, todoCats: (d.todoCats || []).map((c) => (m.has(c.id) ? { ...c, order: m.get(c.id)! } : c)) };
+    });
+    await Promise.all(list.map((c) => supabase.from("todo_cats").update({ position: c.order }).eq("id", c.id)));
+  }, [supabase]);
+
+  const createTodoTask = useCallback(async (input: Partial<T.TodoTask>) => {
+    const t: T.TodoTask = {
+      id: T.uid("tt"), catId: input.catId || null, title: input.title || "Nueva tarea",
+      done: false, day: input.day || T.localDStr(new Date()), doneDay: null,
+      order: 0, deletedAt: null,
+    };
+    setDb((d) => { t.order = T.nextOrder(d.todoTasks || []); return { ...d, todoTasks: [...(d.todoTasks || []), t] }; });
+    const { data } = await supabase.from("todo_tasks").insert(todoTaskRow(t)).select("id").single();
+    if (data && (data as any).id && (data as any).id !== t.id) {
+      const nid = (data as any).id as string;
+      setDb((d) => ({ ...d, todoTasks: (d.todoTasks || []).map((x) => (x.id === t.id ? { ...x, id: nid } : x)) }));
+      return { ...t, id: nid };
+    }
+    return t;
+  }, [supabase, userId]);
+
+  const saveTodoTask = useCallback(async (t: T.TodoTask) => {
+    setDb((d) => ({ ...d, todoTasks: (d.todoTasks || []).map((x) => (x.id === t.id ? t : x)) }));
+    await supabase.from("todo_tasks").update(todoTaskRow(t)).eq("id", t.id);
+  }, [supabase, userId]);
+
+  /* Marcar hecha la manda a «Completadas» de HOY (done_day); al
+     desmarcarla vuelve a pendientes y done_day se limpia. */
+  const toggleTodoTask = useCallback(async (id: string) => {
+    const cur = getDb().todoTasks || [];
+    const t = cur.find((x) => x.id === id);
+    if (!t) return;
+    const nt = { ...t, done: !t.done, doneDay: !t.done ? T.localDStr(new Date()) : null };
+    setDb((d) => ({ ...d, todoTasks: (d.todoTasks || []).map((x) => (x.id === id ? nt : x)) }));
+    await supabase.from("todo_tasks").update({ done: nt.done, done_day: nt.doneDay }).eq("id", id);
+  }, [supabase, getDb]);
+
+  /* Borrar una tarea = papelera global, como todo en la app */
+  const deleteTodoTask = useCallback(async (id: string) => {
+    const now = Date.now();
+    setDb((d) => ({ ...d, todoTasks: (d.todoTasks || []).map((t) => (t.id === id ? { ...t, deletedAt: now } : t)) }));
+    await supabase.from("todo_tasks").update({ is_deleted: true, deleted_at: new Date(now).toISOString() }).eq("id", id);
+  }, [supabase]);
+
+  const restoreTodoTask = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, todoTasks: (d.todoTasks || []).map((t) => (t.id === id ? { ...t, deletedAt: null } : t)) }));
+    await supabase.from("todo_tasks").update({ is_deleted: false, deleted_at: null }).eq("id", id);
+  }, [supabase]);
+
+  const purgeTodoTask = useCallback(async (id: string) => {
+    setDb((d) => ({ ...d, todoTasks: (d.todoTasks || []).filter((t) => t.id !== id) }));
+    await supabase.from("todo_tasks").delete().eq("id", id);
+  }, [supabase]);
+
+  const reorderTodoTasks = useCallback(async (dragId: string, beforeId: string | null) => {
+    let list: T.TodoTask[] = [];
+    setDb((d) => {
+      list = (d.todoTasks || []).filter((t) => !t.deletedAt).slice().sort(T.byOrder);
+      if (!T.reorderList(list, dragId, beforeId)) return d;
+      const m = new Map(list.map((t) => [t.id, t.order]));
+      return { ...d, todoTasks: (d.todoTasks || []).map((t) => (m.has(t.id) ? { ...t, order: m.get(t.id)! } : t)) };
+    });
+    await Promise.all(list.map((t) => supabase.from("todo_tasks").update({ position: t.order }).eq("id", t.id)));
+  }, [supabase]);
+
   const value: Ctx = {
     userId, db, loading, refresh: load, toasts, toast, openUrl,
     saveSpace, createSpace, trashSpace, restoreSpace, purgeSpace, reorderSpaces,
@@ -2135,6 +2315,8 @@ export function TCProvider({ userId, children }: { userId: string; children: Rea
     createYtVidCat, saveYtVidCat, deleteYtVidCat, restoreYtVidCat, purgeYtVidCat, reorderYtVidCats,
     createYtLooseVideo, saveYtLooseVideo, deleteYtLooseVideo, restoreYtLooseVideo, purgeYtLooseVideo, moveYtLooseVideoToCat, reorderYtLooseVideos,
     createHabit, saveHabit, deleteHabit, restoreHabit, purgeHabit, reorderHabits, setHabitDay, addHabitTime,
+    createTodoCat, saveTodoCat, deleteTodoCat, reorderTodoCats,
+    createTodoTask, saveTodoTask, toggleTodoTask, deleteTodoTask, restoreTodoTask, purgeTodoTask, reorderTodoTasks,
     logActivity, clearActivity, emptyTrash, updateSettings,
   };
 

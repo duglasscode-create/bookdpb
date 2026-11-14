@@ -1,0 +1,57 @@
+BookDPB v2.6.0 — LEEME de instalación
+======================================
+
+NOVEDADES DE ESTA VERSIÓN
+-------------------------
+1) MIS ITEMS → ✅ TAREAS, tu To Do nuevo (el borrador que aprobaste):
+   la lista del día con categorías y «🔥 Completadas». Categorías
+   propias con nombre, color e icono (Emoji / Iconos UI / Imagen,
+   como las demás): nace con Food, Workout, Work, Education, Cursos
+   y Other de partida, y creas/editas/borras las tuyas. Al marcar una
+   tarea baja sola a Completadas de hoy; las pendientes de días
+   anteriores siguen en la lista. Drag & drop en categorías y tareas,
+   y soltar una tarea sobre una categoría la mueve. Borrar una tarea
+   va a la papelera global. La fila «Tareas» está en el sidebar de
+   Mis Items, arrastrable como las demás.
+2) Botonera del reproductor ARREGLADA DE RAÍZ: la pausa compartía
+   clase CSS con la plaquita ▶ de las miniaturas y heredaba su «no
+   recibir clics» — flotaba sobre Retroceder y el clic caía en él
+   (por eso «la pausa hacía de anterior»). Barra final, como pediste:
+   ⏮ Retroceder · ⏸ Pausa · ⏭ Adelantar. Fuera el botón Aleatorio
+   y fuera el Sleep (😴), que no usas nunca.
+3) La página de MIS ITEMS ya enseña las tarjetas en TU orden: el
+   mismo que dejas arrastrando las filas del sidebar (antes la
+   página tenía su orden fijo y no se enteraba).
+4) Hábitos: la «Carpeta de recursos vinculada» ofrece SOLO las
+   carpetas que viven dentro de «Cursos» (incluidas las que crees en
+   el futuro para cursos nuevos: aparecen solas). Y «Cursos» queda
+   PROTEGIDO: no se puede eliminar.
+
+INSTALACIÓN (como siempre, en este orden)
+-----------------------------------------
+PASO 1 — SQL (SOLO esta vez, por las Tareas):
+  En Supabase → SQL Editor → pega el contenido del archivo
+  «supabase-migracion-v2.6.0.sql» → Run.
+  Crea las dos tablas de Tareas (todo_cats y todo_tasks). No toca
+  ningún dato que ya tengas; es seguro y re-ejecutable.
+
+PASO 2 — Sustituir el código:
+  Descomprime este ZIP ENCIMA de tu carpeta local de BookDPB
+  (la misma de siempre), diciendo SÍ a reemplazar.
+
+PASO 3 — Subirlo (desde la carpeta, en tu terminal):
+     git add -A
+     git commit -m "BookDPB v2.6.0"
+     git push
+  Vercel despliega solo en 1-2 minutos.
+
+¿CÓMO SÉ QUE ESTOY EN LA v2.6.0?
+--------------------------------
+  Abre «Novedades» / el historial de versiones dentro de la app:
+  tiene que encabezar la lista la v2.6.0. Y en Mis Items verás la
+  fila nueva «✅ Tareas».
+
+NOTA
+----
+  Los SQL de versiones anteriores NO hay que volver a ejecutarlos:
+  cada uno se ejecuta una sola vez, el suyo.

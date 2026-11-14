@@ -24,7 +24,7 @@ let dragState: { type: string; id: string } | null = null;
 let downEl: HTMLElement | null = null;
 
 const SEC_DEFAULT = ["spaces", "misitems", "youtube", "habitos", "tags", "sessions"];
-const ITEM_KEYS = ["accounts", "reminders", "favorites", "history", "trash", "readlater"];
+const ITEM_KEYS = ["accounts", "reminders", "favorites", "history", "trash", "readlater", "tasks"];
 const YT_KEYS = ["ytlists", "ytloose", "ytsubs", "ytdone"];
 const YT_DEFS: Record<string, { label: string; icon: string; hint: string }> = {
   ytlists: { label: "Listas", icon: "🎬", hint: "Tus listas de videos de YouTube, agrupadas por categorías" },
@@ -196,8 +196,6 @@ function YtPlayerBar() {
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(0);
   const [dur, setDur] = useState(0);
-  const [shuffle, setShuffle] = useState(false);
-  const [sleep, setSleep] = useState("Off");
   const [big, setBig] = useState(false);
   const accRef = useRef(0);
   const lastPosRef = useRef(0);
@@ -208,8 +206,6 @@ function YtPlayerBar() {
   queueRef.current = queue;
   const looseModeRef = useRef(looseMode);
   looseModeRef.current = looseMode;
-  const shuffleRef = useRef(shuffle);
-  shuffleRef.current = shuffle;
 
   const flush = useCallback((finalPos?: number) => {
     const v = curRef.current;
@@ -227,10 +223,7 @@ function YtPlayerBar() {
     const q = queueRef.current;
     const i = q.findIndex((x) => x.id === v.id);
     if (i < 0) return false;
-    let n = shuffleRef.current && dir > 0
-      ? Math.floor(Math.random() * q.length)
-      : i + dir;
-    if (n === i && q.length > 1) n = (i + 1) % q.length;
+    const n = i + dir;
     if (n < 0 || n >= q.length) return false;
     if (looseModeRef.current) playLoose(v.listId || null, q[n].id);
     else playYt(v.listId, q[n].id);
@@ -331,18 +324,6 @@ function YtPlayerBar() {
     return () => clearInterval(t);
   }, [tc]);
 
-  /* Sleep timer */
-  useEffect(() => {
-    if (sleep === "Off") return;
-    const mins = parseInt(sleep, 10) || 0;
-    const t = window.setTimeout(() => {
-      if (playerRef.current && typeof playerRef.current.pauseVideo === "function") playerRef.current.pauseVideo();
-      tc.toast("😴 Sleep timer: reproducción en pausa");
-      setSleep("Off");
-    }, mins * 60000);
-    return () => window.clearTimeout(t);
-  }, [sleep, tc]);
-
   /* Al cerrar la barra se destruye el reproductor */
   useEffect(() => {
     document.body.classList.add("yt-open");
@@ -373,7 +354,6 @@ function YtPlayerBar() {
   const next = queue[idx + 1];
   const total = dur || cur.durationSec || 0;
   const pct = total ? Math.min(100, (pos / total) * 100) : 0;
-  const sleepOpts = ["Off", "5 min", "10 min", "20 min", "30 min"];
 
   return (
     <>
@@ -401,14 +381,10 @@ function YtPlayerBar() {
         </div>
         <div className="yt-bar-center">
           <div className="yt-bar-btns">
-            <button className={"yt-ibtn" + (shuffle ? " on" : "")} title="Aleatorio"
-              onClick={() => setShuffle(!shuffle)}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8" /><line x1="4" y1="20" x2="21" y2="3" /><polyline points="21 16 21 21 16 21" /><line x1="15" y1="15" x2="21" y2="21" /><line x1="4" y1="4" x2="9" y2="9" /></svg>
-            </button>
             <button className="yt-ibtn" title="Retroceder · vídeo anterior" onClick={() => step(-1)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2.5v14H6zM19.5 5v14L10 12z" /></svg>
             </button>
-            <button className="yt-ibtn yt-play" title={playing ? "Pausa" : "Reproducir"}
+            <button className="yt-ibtn yt-playbtn" title={playing ? "Pausa" : "Reproducir"}
               onClick={() => {
                 const p = playerRef.current; if (!p) return;
                 if (playing) p.pauseVideo(); else p.playVideo();
@@ -436,10 +412,6 @@ function YtPlayerBar() {
             title="Marcar / desmarcar como visto"
             onClick={() => tc.setYtWatched(cur.youtubeId, !cur.watched)}>
             {cur.watched ? "✓ Visto" : "○ Marcar visto"}</button>
-          <button className={"chip-btn" + (sleep !== "Off" ? " on" : "")}
-            title="Sleep timer: pausar dentro de…"
-            onClick={() => setSleep(sleepOpts[(sleepOpts.indexOf(sleep) + 1) % sleepOpts.length])}>
-            😴 {sleep}</button>
           <span className="yt-next" title={next ? next.title : ""}>
             {next ? "Siguiente: " + next.title : "Fin de la lista"}</span>
           <button className="yt-ibtn" title="Cerrar reproductor"
@@ -1642,7 +1614,12 @@ function HelpModals() {
   if (kind === "changelog") {
     return (
       <ModalShell wide>
-        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.5.2</h3><ul>
+        <div className="help-modal changelog"><h3>🎁 Novedades de la v2.6.0</h3><ul>
+          <li>✅ <b>Mis Items: ítem nuevo «Tareas»</b> — tu To Do dentro de BookDPB, como el borrador aprobado: la lista del día con sus categorías y su «🔥 Completadas». Categorías propias con nombre, color e icono (Emoji / Iconos UI / Imagen, como las demás categorías): nace con Food, Workout, Work, Education, Cursos y Other de partida, y puedes crear, editar y borrar las tuyas. Al marcar una tarea hecha baja sola a Completadas de hoy; las pendientes de días anteriores siguen en la lista hasta que las hagas. Drag & drop en todo: reordenas categorías y tareas arrastrando, y sueltas una tarea sobre una categoría para moverla. Borrar una tarea va a la papelera global, y la fila «Tareas» vive en el sidebar de Mis Items, arrastrable como las demás. Necesita ejecutar una vez el SQL v2.6.0.</li>
+          <li>⏯️ <b>Botonera del reproductor, arreglada de raíz</b> — causa encontrada: la plaquita ▶ de las miniaturas y el botón de pausa compartían la misma clase CSS, y la pausa heredaba el «no recibir clics» de la plaquita y flotaba encima de Retroceder: por eso la pausa hacía de anterior desde siempre (el arreglo de la v2.5.2 por tamaño no era la causa; aquí queda corregido). La barra queda como la pediste: ⏮ Retroceder · ⏸ Pausa · ⏭ Adelantar. Fuera el botón Aleatorio y fuera el Sleep (😴), que no usas nunca.</li>
+          <li>📗 <b>La página de Mis Items sigue tu orden del sidebar</b> — arrastrar las filas del sidebar reordenaba el sidebar, pero la página seguía enseñando su orden fijo; ahora la página enseña las tarjetas en tu mismo orden.</li>
+          <li>🌱 <b>Hábitos: la carpeta vinculada sale solo de «Cursos»</b> — el desplegable ofrece únicamente las carpetas que viven dentro de «Cursos»: las de tus cursos, incluidas las que crees en el futuro, que aparecen solas. Y «Cursos» queda protegido: no se puede eliminar.</li>
+        </ul><h4 style={{ marginTop: 14 }}>v2.5.2</h4><ul>
           <li>⏱️ <b>El cronómetro de Hábitos ya no se pierde</b>: antes vivía dentro de la vista de Hábitos y moría sin guardar si salías de la vista o el iPad recargaba la página — por eso un estudio de 1 h 44 podía quedarse en 1 h 10. Ahora su arranque queda guardado en tus ajustes: <b>sigue contando por hora real aunque cambies de vista, de pestaña o de web, y aunque cierres y reabras la app</b>; al volver lo verás en marcha donde lo dejaste. Nuevo botón ✕ para cancelarlo sin guardar si te equivocas de hábito. El tiempo de los vídeos de YouTube de tus listas se sigue sumando sobre la marcha, como siempre — eso no se ha tocado.</li>
           <li>🎞️ <b>Hábitos vinculados también a Vídeos sueltos</b>: el desplegable «Vincular a Youtube Manager» del hábito ahora tiene dos grupos — 🎬 Listas y 🎞️ Vídeos sueltos — y el tiempo que veas de vídeos sueltos de la categoría vinculada suma al hábito y marca el día, igual que con las listas.</li>
           <li>⏯️ <b>Botonera del reproductor corregida</b>: botones más grandes y separados, para no pulsar el de al lado sin querer — 🔀 Aleatorio · ⏮ Retroceder (vídeo anterior) · ⏸/▶ Pausar/Reproducir, grande en el centro · ⏭ Adelantar (vídeo siguiente) — cada uno con su nombre claro al pasar el puntero.</li>
